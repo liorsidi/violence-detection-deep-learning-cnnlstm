@@ -1,8 +1,17 @@
+
+import BuildModel
+import pandas as pd
+from keras.applications import Xception, ResNet50, InceptionV3
+from keras.layers import LSTM, ConvLSTM2D
+from sklearn.metrics import accuracy_score
+
+import DatasetBuilder
+
 raw_data = dict(hocky = "data/hocky")
 dataset_path = "/datasets/"
 figure_size = 256
 split_ratio = 0.8
-train_path, test_path, avg_length = DatasetBuilder.createDataset(raw_data, dataset_path + raw_name, figure_size,split_ratio)
+train_path, test_path, avg_length = DatasetBuilder.createDataset(raw_data, dataset_path, figure_size,split_ratio)
 train_x, train_y, test_x, test_y = DatasetBuilder.loadData(train_path, test_path )
 
 epoch = 10
