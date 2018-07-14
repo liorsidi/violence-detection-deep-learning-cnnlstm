@@ -83,6 +83,6 @@ def build(epoch = default_values["epoch"],\
     model.compile(optimizer=optimizer, loss='categorical_crossentropy')
 
     model.summary()
-    print("Commit update")
+    print("Commit update2")
 
     return model
