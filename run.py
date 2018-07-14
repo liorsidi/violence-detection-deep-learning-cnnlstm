@@ -1,3 +1,4 @@
+from keras.optimizers import RMSprop
 
 import BuildModel
 import pandas as pd
@@ -5,13 +6,14 @@ from keras.applications import Xception, ResNet50, InceptionV3
 from keras.layers import LSTM, ConvLSTM2D
 from sklearn.metrics import accuracy_score
 
+import BuildModel_basic
 import DatasetBuilder
 
 datasets_videos = dict(hocky ="data/raw_videos/HockeyFights")
 datasets_frames = "data/raw_frames"
 figure_size = 244
 split_ratio = 0.8
-epoch = 10
+epochs = 10
 learning_rate = 0.0004
 batch_size = 16
 load_all = True
@@ -23,7 +25,7 @@ else:
 
 test_x, test_y = DatasetBuilder.load_data(test_path,test_y,figure_size,avg_length)
 
-optimizer ='RMSprop'
+optimizer =(RMSprop,{})
 initial_weights = 'Xavier'
 
 weights='imagenet'
@@ -39,18 +41,19 @@ results = []
 for cnn_train_type in cnn_train_types:
     for cnn_name, cnn_class in cnns_pretrained.iteritems():
         for lstm_name, lstm_conf in lstms_type.iteritems():
-            #lstm = lstm_conf[0](**lstm_conf[1])
-            result = dict(cnn_train = cnn_train_type,cnn = cnn_name, lstm = lstm_name,epoch = epoch,learning_rate = learning_rate, batch_size = batch_size,
-                                     optimizer = optimizer, initial_weights = initial_weights)
-            model = BuildModel.build(epoch = epoch,learning_rate = learning_rate, batch_size = batch_size,
-                                     optimizer = optimizer, initial_weights = initial_weights,
+            result = dict(cnn_train = cnn_train_type,cnn = cnn_name, lstm = lstm_name,epochs = epochs,learning_rate = learning_rate, batch_size = batch_size,
+                                     optimizer = RMSprop.__class__.__name__, initial_weights = initial_weights,seq_len = avg_length)
+
+            model = BuildModel_basic.build(seq_len = avg_length, learning_rate = learning_rate,
+                                           optimizer_class = optimizer, initial_weights = initial_weights,
                                      cnn_class = cnn_class,pre_weights = weights, lstm_conf = lstm_conf)
             if load_all:
-                model.fit(train_x, train_y)
+                model.fit(train_x, train_y, epochs=epochs,batch_size = batch_size)
             else:
                 model.fit_generator(
                     generator=train_gen,
-                    epochs=epoch,
+                    epochs=epochs,
+                    batch_size = batch_size,
                     verbose=1,
                     validation_steps=40,
                     workers=4)
