@@ -7,16 +7,22 @@ from sklearn.metrics import accuracy_score
 
 import DatasetBuilder
 
-raw_data = dict(hocky = "data/hocky")
-dataset_path = "/datasets/"
-figure_size = 256
+datasets_videos = dict(hocky ="data/raw_videos/HockeyFights")
+datasets_frames = "data/raw_frames"
+figure_size = 244
 split_ratio = 0.8
-train_path, test_path, avg_length = DatasetBuilder.createDataset(raw_data, dataset_path, figure_size,split_ratio)
-train_x, train_y, test_x, test_y = DatasetBuilder.loadData(train_path, test_path )
-
 epoch = 10
 learning_rate = 0.0004
 batch_size = 16
+load_all = True
+train_path, test_path,train_y, test_y, avg_length = DatasetBuilder.createDataset(datasets_videos, datasets_frames, figure_size, split_ratio)
+if load_all:
+    train_x, train_y = DatasetBuilder.load_data(train_path,train_y,figure_size,avg_length)
+else:
+    train_gen = DatasetBuilder.data_generator(train_path,train_y,batch_size,figure_size,avg_length)
+
+test_x, test_y = DatasetBuilder.load_data(test_path,test_y,figure_size,avg_length)
+
 optimizer ='RMSprop'
 initial_weights = 'Xavier'
 
@@ -39,7 +45,15 @@ for cnn_train_type in cnn_train_types:
             model = BuildModel.build(epoch = epoch,learning_rate = learning_rate, batch_size = batch_size,
                                      optimizer = optimizer, initial_weights = initial_weights,
                                      cnn_class = cnn_class,pre_weights = weights, lstm_conf = lstm_conf)
-            model.fit(train_x,train_y)
+            if load_all:
+                model.fit(train_x, train_y)
+            else:
+                model.fit_generator(
+                    generator=train_gen,
+                    epochs=epoch,
+                    verbose=1,
+                    validation_steps=40,
+                    workers=4)
             preds = model.predcit(test_x)
             result['accuracy'] = accuracy_score(preds, test_y)
             results.append(result)
