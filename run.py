@@ -1,3 +1,4 @@
+from keras.optimizers import RMSprop
 
 import BuildModel
 import pandas as pd
@@ -5,19 +6,26 @@ from keras.applications import Xception, ResNet50, InceptionV3
 from keras.layers import LSTM, ConvLSTM2D
 from sklearn.metrics import accuracy_score
 
+import BuildModel_basic
 import DatasetBuilder
 
-raw_data = dict(hocky = "data/hocky")
-dataset_path = "/datasets/"
-figure_size = 256
+datasets_videos = dict(hocky ="data/raw_videos/HockeyFights")
+datasets_frames = "data/raw_frames"
+figure_size = 244
 split_ratio = 0.8
-train_path, test_path, avg_length = DatasetBuilder.createDataset(raw_data, dataset_path, figure_size,split_ratio)
-train_x, train_y, test_x, test_y = DatasetBuilder.loadData(train_path, test_path )
-
-epoch = 10
+epochs = 10
 learning_rate = 0.0004
 batch_size = 16
-optimizer ='RMSprop'
+load_all = True
+train_path, test_path,train_y, test_y, avg_length = DatasetBuilder.createDataset(datasets_videos, datasets_frames, figure_size, split_ratio)
+if load_all:
+    train_x, train_y = DatasetBuilder.load_data(train_path,train_y,figure_size,avg_length)
+else:
+    train_gen = DatasetBuilder.data_generator(train_path,train_y,batch_size,figure_size,avg_length)
+
+test_x, test_y = DatasetBuilder.load_data(test_path,test_y,figure_size,avg_length)
+
+optimizer =(RMSprop,{})
 initial_weights = 'Xavier'
 
 weights='imagenet'
@@ -29,21 +37,28 @@ lstms_type = dict(
     COV_LSTM = (ConvLSTM2D, dict(filters=256, kernel_size=3))
                   )
 
-#ResNet50 - [224,224]
-
 results = []
 for cnn_train_type in cnn_train_types:
-    for cnn_name, cnn_class in cnns_pretrained.items():
-        for lstm_name, lstm_conf in lstms_type.items():
-            #lstm = lstm_conf[0](**lstm_conf[1])
-            result = dict(cnn_train = cnn_train_type,cnn = cnn_name, lstm = lstm_name,epoch = epoch,learning_rate = learning_rate, batch_size = batch_size,
-                                     optimizer = optimizer, initial_weights = initial_weights)
-            model = BuildModel.build(epoch = epoch,learning_rate = learning_rate, batch_size = batch_size,
-                                     optimizer = optimizer, initial_weights = initial_weights,
-                                     cnn_class = cnn_class,pre_weights = weights, lstm_conf = lstm_conf,cnn_train_type=cnn_train_type)
-            model.fit(train_x,train_y)
+    for cnn_name, cnn_class in cnns_pretrained.iteritems():
+        for lstm_name, lstm_conf in lstms_type.iteritems():
+            result = dict(cnn_train = cnn_train_type,cnn = cnn_name, lstm = lstm_name,epochs = epochs,learning_rate = learning_rate, batch_size = batch_size,
+                                     optimizer = RMSprop.__class__.__name__, initial_weights = initial_weights,seq_len = avg_length)
+
+            model = BuildModel_basic.build(seq_len = avg_length, learning_rate = learning_rate,
+                                           optimizer_class = optimizer, initial_weights = initial_weights,
+                                     cnn_class = cnn_class,pre_weights = weights, lstm_conf = lstm_conf)
+            if load_all:
+                model.fit(train_x, train_y, epochs=epochs,batch_size = batch_size)
+            else:
+                model.fit_generator(
+                    generator=train_gen,
+                    epochs=epochs,
+                    batch_size = batch_size,
+                    verbose=1,
+                    validation_steps=40,
+                    workers=4)
             preds = model.predcit(test_x)
             result['accuracy'] = accuracy_score(preds, test_y)
             results.append(result)
-            print (result)
+            print result
 pd.DataFrame(results).to_csv("results.csv")
