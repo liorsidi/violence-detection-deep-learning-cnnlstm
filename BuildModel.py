@@ -84,5 +84,5 @@ def build(epoch = default_values["epoch"],\
 
     model.summary()
     print("Commit update2")
-
+    print("Commit update3")
     return model
