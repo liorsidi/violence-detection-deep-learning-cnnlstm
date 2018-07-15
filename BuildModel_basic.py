@@ -12,77 +12,55 @@ from keras.applications import Xception, ResNet50, InceptionV3
 from keras.layers import Dense, GlobalAveragePooling2D
 from keras.models import Model
 
-
-logger = logging.getLogger('Builder_moudle')
-logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
-
-
-epoch = 10
-learning_rate = 0.0004
-batch_size = 16
-optimizer ='RMSprop'
-initial_weights = 'Xavier'
-
-default_values = dict(epoch=10,\
-                      learning_rate=0.0004,\
-                      batch_size=16,\
-                      optimizer=Adam,\
-                      initial_weights=0,\
-                      cnn_class=Xception,\
-                      pre_weights='Xavier',\
-                      lstm_conf=(LSTM,dict(units = 256)),\
-                      cnn_train_type='static'
-                      )
-
-
-def build(epoch = default_values["epoch"],\
-          learning_rate = default_values["learning_rate"], \
-          batch_size = default_values["batch_size"],\
-          optimizer = default_values["optimizer"],\
-          initial_weights = default_values["initial_weights"],\
-          cnn_class = default_values["cnn_class"],\
-          pre_weights = default_values["pre_weights"], \
-          lstm_conf = default_values["lstm_conf"], \
-          cnn_train_type=default_values["cnn_train_type"]):
-
-    model=0
+def build(size, seq_len , learning_rate ,
+          optimizer_class ,\
+          initial_weights ,\
+          cnn_class ,\
+          pre_weights , \
+          lstm_conf , \
+          cnn_train_type):
     #Create CNN
+
+    input_layer = Input(shape=(seq_len, size, size, 3))
+
+
+
     if(cnn_train_type!='train'):
-        logger.info("CNN Created with Pre-weights:{}".format(pre_weights))
-        base_model = cnn_class(weights=pre_weights,include_top=False)
+        cnn = cnn_class(weights=pre_weights,include_top=False)
     else:
-        logger.info("CNN Created with no Pre-weights")
-        base_model = cnn_class()
+        cnn = cnn_class(include_top=False)
+
+    # input_layer2 = Input(shape=(size, size, 3))
+    # cnn2 = cnn(input_layer2)
+    # model = Model(inputs=input_layer2, outputs=cnn2)
+    # print model.summary()
 
     #control Train_able of CNNN
     if(cnn_train_type=='static'):
-        logger.info("CNN set to NOT-Train")
-        for layer in base_model.layers:
+        for layer in cnn.layers:
             layer.trainable = False
     if(cnn_train_type=='retrain'):
-        logger.info("CNN set to retrain")
-        for layer in base_model.layers:
+        for layer in cnn.layers:
             layer.trainable = True
 
-    # print(base_model.summary())
-    # add a global spatial average pooling layer
-    x = base_model.output
-    logger.info("base_model.output: {}".format(base_model.output))
-    x = GlobalAveragePooling2D()(x)
-    # let's add a fully-connected layer
-    x = Dense(1024, activation='relu')(x)
-    # and a logistic layer -- let's say we have 200 classes
-    predictions = Dense(100 , activation='softmax')(x)
+    cnn = TimeDistributed(cnn)(input_layer)
 
-    model = Model(inputs=base_model.input, outputs=predictions)
-    model.compile(optimizer=optimizer, loss='categorical_crossentropy')
+    # model = Model(inputs=input_layer, outputs=cnn)
+    # print model.summary()
 
-    model.summary()
-    print("Commit update2")
+    # lstm= ConvLSTM2D(filters=256, kernel_size=(3, 3),padding='same', return_sequences=False)(cnn)
+    lstm = lstm_conf[0](**lstm_conf[1])(cnn)
+    flat = Flatten()(lstm)
+    dense = BatchNormalization()(flat)
+    #dense = Dense(1000,activation= 'relu', kernel_initializer =initial_weights)(dense)
+    dense = Dense(256, activation= 'relu', kernel_initializer=initial_weights)(dense)
+    dense = Dense(10, activation= 'relu', kernel_initializer=initial_weights)(dense)
+    predictions = Dense(1,  activation='sigmoid')(dense)
+
+    model = Model(inputs=input_layer, outputs=predictions)
+    optimizer = optimizer_class[0](lr=learning_rate, **optimizer_class[1])
+    model.compile(optimizer=optimizer, loss='binary_crossentropy',metrics=['acc'])
+
+    print(model.summary())
 
     return model

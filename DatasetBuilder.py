@@ -16,7 +16,6 @@ def save_figures_from_video(dataset_video_path, video_filename,figures_path,skip
     video_figures_path = os.path.join(figures_path ,video_filename)
     if not os.path.exists(video_figures_path):
         os.makedirs(video_figures_path)
-    video_figures_path = video_figures_path + 'frame_'
 
     video_file = os.path.join(dataset_video_path, video_filename + ".avi")
     label = 0
@@ -29,7 +28,7 @@ def save_figures_from_video(dataset_video_path, video_filename,figures_path,skip
         videoCapture.set(cv2.CAP_PROP_POS_MSEC, (seq_len * skip_frames))
         success, figure = videoCapture.read()
         if success:
-            image_file = video_figures_path + "%d.jpg" % seq_len
+            image_file = os.path.join(video_figures_path , "frame_%d.jpg" % seq_len)
             files.append(image_file)
             cv2.imwrite(image_file, figure)
         seq_len += 1
@@ -38,7 +37,7 @@ def save_figures_from_video(dataset_video_path, video_filename,figures_path,skip
 
     return video_images
 
-def createDataset(datasets_video_path, figure_output_path, figure_size, split_ratio, force = True):
+def createDataset(datasets_video_path, figure_output_path, force):
     videos_seq_length = []
     datasets_images = {}
     videos_frames_paths = []
@@ -117,7 +116,7 @@ def data_generator(data_paths,labels,batch_size,figure_shape,seq_length):
 def load_data(data_paths,labels,figure_shape,seq_length):
     X, y = [], []
     for select_index in range(len(data_paths)):
-        frames = sorted(glob.glob(os.path.join(data_paths[select_index]+ '*jpg')))
+        frames = sorted(glob.glob(os.path.join(data_paths[select_index], '*jpg')))
         x = frame_loader(frames, figure_shape)
         X.append(x)
         y.append(labels[select_index])
