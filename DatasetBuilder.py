@@ -10,34 +10,50 @@ from sklearn.model_selection import train_test_split
 
 from keras.preprocessing import image
 
-def save_figures_from_video(dataset_video_path, video_filename,figures_path,skip_frames = 25):
+def save_figures_from_video(dataset_video_path, video_filename, suffix,figures_path,skip_frames = 25,apply_norm = True, apply_diff = True,fix_len = None):
     seq_len = 0
 
     video_figures_path = os.path.join(figures_path ,video_filename)
     if not os.path.exists(video_figures_path):
         os.makedirs(video_figures_path)
 
-    video_file = os.path.join(dataset_video_path, video_filename + ".avi")
+    video_file = os.path.join(dataset_video_path, video_filename + suffix)
     label = 0
     print('Extracting frames from video: ', video_file)
+
     videoCapture = cv2.VideoCapture(video_file)
-    success, figure = videoCapture.read()
+    if fix_len is not None:
+        vid_len = int(videoCapture.get(cv2.CAP_PROP_FRAME_COUNT))
+        skip_frames = int(float(vid_len)/float(fix_len))
+    videoCapture.set(cv2.CAP_PROP_POS_MSEC, (seq_len * skip_frames))
+    success, figure_ = videoCapture.read()
     success = True
     files = []
     while success:
-        videoCapture.set(cv2.CAP_PROP_POS_MSEC, (seq_len * skip_frames))
         success, figure = videoCapture.read()
-        if success:
-            image_file = os.path.join(video_figures_path , "frame_%d.jpg" % seq_len)
-            files.append(image_file)
-            cv2.imwrite(image_file, figure)
+        if seq_len % skip_frames == 0:
+            if success:
+                if apply_norm:
+                    mean = [0.485, 0.456, 0.406]
+                    std = [0.229, 0.224, 0.225]
+                    figure = (figure - mean) / std
+                    if seq_len == 0:
+                        figure_ = (figure_ - mean) / std
+                if apply_diff:
+                    figure_curr = figure - figure_
+                    figure_ = figure
+                else:
+                    figure_curr = figure
+                image_file = os.path.join(video_figures_path , "frame_%d.jpg" % seq_len)
+                files.append(image_file)
+                cv2.imwrite(image_file, figure_curr)
         seq_len += 1
     video_images = dict(images_path = video_figures_path, name = video_filename,
                         images_files = files, sequence_length = seq_len, label = label)
 
     return video_images
 
-def createDataset(datasets_video_path, figure_output_path, force):
+def createDataset(datasets_video_path, figure_output_path,fix_len, apply_aug = True, force = False):
     videos_seq_length = []
     datasets_images = {}
     videos_frames_paths = []
@@ -49,21 +65,21 @@ def createDataset(datasets_video_path, figure_output_path, force):
             os.makedirs(dataset_figures_path)
         dataset_images = []
         for filename in os.listdir(dataset_video_path):
-            if filename.endswith(".avi"):
+            if filename.endswith(".avi") or filename.endswith(".mpg"):
                 video_images_file = os.path.join(dataset_figures_path,filename[:-4], 'video_summary.pkl')
                 if os.path.isfile(video_images_file) and not force:
                     with open(video_images_file, 'rb') as f:
                         video_images = pickle.load(f)
                 else:
-                    video_images = save_figures_from_video(dataset_video_path, filename[:-4], dataset_figures_path)
+                    video_images = save_figures_from_video(dataset_video_path, filename[:-4],filename[-4:], dataset_figures_path, fix_len =fix_len)
                     if dataset_name == "hocky":
                         if filename.startswith("fi"):
                             video_images['label'] = 1
                     elif dataset_name == "violentflow":
-                        if not dataset_video_path.contains("Non"):
+                        if "violence" in filename:
                             video_images['label'] = 1
                     elif dataset_name == "movies":
-                        if not dataset_video_path.contains("noFights"):
+                        if "fi" in dataset_name:
                             video_images['label'] = 1
                     with open(video_images_file, 'wb') as f:
                         pickle.dump(video_images, f, pickle.HIGHEST_PROTOCOL)
@@ -74,51 +90,123 @@ def createDataset(datasets_video_path, figure_output_path, force):
         datasets_images[dataset_name] = dataset_images
     avg_length = int(float(sum(videos_seq_length)) / max(len(videos_seq_length), 1))
 
-    # sequences_paths = []
-    # for dataset_name, dataset_images in datasets_images.iteritems():
-    #     for filename in os.listdir(dataset_images['images_path']):
-    #         frames = sorted(glob.glob(os.path.join(figure_output_path,dataset_name + '*jpg')))
-    #         #TODO resize
-    #         #TODO transformation
-    #         #TODO compute diff
-    #         #TODO save as a sequence
-    #         #TODO add ti dict
+    train_path, test_path, train_y, test_y =  train_test_split(videos_frames_paths,videos_labels, test_size=0.20, random_state=42)
+    train_path, valid_path, train_y, valid_y = train_test_split(train_path,train_y, test_size=0.10, random_state=42)
 
-    train_path, test_path =  train_test_split(videos_frames_paths, test_size=0.20, random_state=42)
-    train_y, test_y = train_test_split(videos_labels, test_size=0.20, random_state=42)
+    if apply_aug:
+        aug_paths = []
+        aug_y = []
+        for train_path_, train_y_ in zip(train_path,train_y):
 
-    return train_path, test_path,train_y, test_y, avg_length
+            aug_path = generate_augmentations(train_path_,force = False)
+            aug_paths.append(aug_path)
+            aug_y.append(train_y_)
 
-def frame_loader(frames,figure_shape):
+        train_path = train_path + aug_paths
+        train_y = train_y + aug_y
+
+    return train_path,valid_path, test_path,\
+           train_y, valid_y, test_y,\
+           avg_length
+
+def frame_loader(frames,figure_shape,to_norm = True):
     output_frames = []
     for frame in frames:
-        image = load_img(frame, target_size=(figure_shape, figure_shape))
+        image = load_img(frame, target_size=(figure_shape, figure_shape),interpolation='bilinear')
         img_arr = img_to_array(image)
-        x = (img_arr / 255.).astype(np.float32)
+        if to_norm:
+            x = (img_arr / 255.).astype(np.float32)
+        else:
+            x = img_arr
         output_frames.append(x)
     return output_frames
 
 
 def data_generator(data_paths,labels,batch_size,figure_shape,seq_length):
     while True:
-        X, y = [], []
         indexes = np.arange(len(data_paths))
         np.random.shuffle(indexes)
         select_indexes = indexes[:batch_size]
-        for select_index in select_indexes:
-            frames = sorted(glob.glob(os.path.join(data_paths[select_index], '*jpg')))
-            x = frame_loader(frames, figure_shape)
-            X.append(x)
-            y.append(labels[select_index])
-        X = pad_sequences(X,maxlen = seq_length, padding = 'pre' , truncating = 'pre' )
-        yield np.array(X), np.array(y)
+        data_paths_batch = [data_paths[i] for i in select_indexes]
+        labels_batch = [labels[i] for i in select_indexes]
+        X, y = get_sequences(data_paths_batch,labels_batch,figure_shape,seq_length)
+        yield X, y
 
-def load_data(data_paths,labels,figure_shape,seq_length):
+def data_generator_files(data,labels,batch_size):
+    while True:
+        indexes = np.arange(len(data))
+        np.random.shuffle(indexes)
+        select_indexes = indexes[:batch_size]
+        X = [data[i] for i in select_indexes]
+        y = [labels[i] for i in select_indexes]
+        yield X, y
+
+def get_sequences(data_paths,labels,figure_shape,seq_length):
     X, y = [], []
-    for select_index in range(len(data_paths)):
-        frames = sorted(glob.glob(os.path.join(data_paths[select_index], '*jpg')))
+    for data_path, label in zip(data_paths,labels):
+        frames = sorted(glob.glob(os.path.join(data_path, '*jpg')))
         x = frame_loader(frames, figure_shape)
         X.append(x)
-        y.append(labels[select_index])
-    X = pad_sequences(X,maxlen = seq_length, padding = 'pre' , truncating = 'pre' )
+        y.append(label)
+    X = pad_sequences(X, maxlen=seq_length, padding='pre', truncating='pre')
     return np.array(X), np.array(y)
+
+import re
+
+def natural_sort(l):
+    convert = lambda text: int(text) if text.isdigit() else text.lower()
+    alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ]
+    return sorted(l, key = alphanum_key)
+
+def generate_augmentations(data_path,figure_shape = 244, force = False):
+    seq_len = 0
+    frames = natural_sort(glob.glob(os.path.join(data_path, '*jpg')))
+    frames_arr = frame_loader(frames, figure_shape)
+    crop_path = data_path + "_crop"
+    if not os.path.exists(crop_path) or force:
+        print("augmenting " + data_path)
+        os.makedirs(crop_path)
+        for frame in frames_arr:
+            #transpose
+            img_transpose = frame.transpose(1,0,2)
+            data_path_aug = os.path.join(crop_path,"frame_%d.jpg" % seq_len)
+            cv2.imwrite(data_path_aug, img_transpose)
+            seq_len += 1
+    return crop_path
+
+# def load_data(data_paths,labels,figure_shape,seq_length):
+#     X, y = [], []
+#     for select_index in range(len(data_paths)):
+#         x = get_sequence(data_paths[select_index])
+#         frames = sorted(glob.glob(os.path.join(data_paths[select_index], '*jpg')))
+#         x = frame_loader(frames, figure_shape)
+#         X.append(x)
+#         y.append(labels[select_index])
+#     X = pad_sequences(X,maxlen = seq_length, padding = 'pre' , truncating = 'pre' )
+#     return np.array(X), np.array(y)
+#
+# def load_data(data_paths,labels,figure_shape,seq_length):
+#     X,y = [], []
+#     x, y = get_sequences(data_paths,labels)
+#     for select_index in range(len(data_paths)):
+#
+#         frames = sorted(glob.glob(os.path.join(data_paths[select_index], '*jpg')))
+#         x = frame_loader(frames, figure_shape)
+#         X.append(x)
+#         y.append(labels[select_index])
+#     X = pad_sequences(X,maxlen = seq_length, padding = 'pre' , truncating = 'pre' )
+#     return np.array(X), np.array(y)
+#
+# def data_generator(data_paths,labels,batch_size,figure_shape,seq_length):
+#     while True:
+#         X, y = [], []
+#         indexes = np.arange(len(data_paths))
+#         np.random.shuffle(indexes)
+#         select_indexes = indexes[:batch_size]
+#         for select_index in select_indexes:
+#             frames = sorted(glob.glob(os.path.join(data_paths[select_index], '*jpg')))
+#             x = frame_loader(frames, figure_shape)
+#             X.append(x)
+#             y.append(labels[select_index])
+#         X = pad_sequences(X,maxlen = seq_length, padding = 'pre' , truncating = 'pre' )
+#         yield np.array(X), np.array(y)
