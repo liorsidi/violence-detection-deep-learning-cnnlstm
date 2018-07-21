@@ -27,7 +27,10 @@ def build(size, seq_len , learning_rate ,
 
 
     if(cnn_train_type!='train'):
-        cnn = cnn_class(weights=pre_weights,include_top=False)
+        if cnn_class.__name__ == "ResNet50":
+            cnn = cnn_class(weights=pre_weights, include_top=False,input_shape =(size, size, 3))
+        else:
+            cnn = cnn_class(weights=pre_weights,include_top=False)
     else:
         cnn = cnn_class(include_top=False)
 
@@ -41,9 +44,9 @@ def build(size, seq_len , learning_rate ,
 
     cnn = TimeDistributed(cnn)(input_layer)
     lstm = lstm_conf[0](**lstm_conf[1])(cnn)
-    mxpool = MaxPooling2D(pool_size=(2, 2))(lstm)
-    flat = Flatten()(mxpool)
-    linear = Dense(512)(flat)
+    lstm = MaxPooling2D(pool_size=(2, 2))(lstm)
+    flat = Flatten()(lstm)
+    linear = Dense(1000)(flat)
     bn = BatchNormalization()(linear)
     relu = Activation('relu')(bn)
     linear = Dense(256)(relu)

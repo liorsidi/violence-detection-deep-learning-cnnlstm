@@ -79,7 +79,7 @@ def createDataset(datasets_video_path, figure_output_path,fix_len, apply_aug = T
                         if "violence" in filename:
                             video_images['label'] = 1
                     elif dataset_name == "movies":
-                        if "fi" in dataset_name:
+                        if "fi" in filename:
                             video_images['label'] = 1
                     with open(video_images_file, 'wb') as f:
                         pickle.dump(video_images, f, pickle.HIGHEST_PROTOCOL)
@@ -160,10 +160,10 @@ def natural_sort(l):
 
 def generate_augmentations(data_path,figure_shape = 244, force = False):
     seq_len = 0
-    frames = natural_sort(glob.glob(os.path.join(data_path, '*jpg')))
-    frames_arr = frame_loader(frames, figure_shape)
     crop_path = data_path + "_crop"
     if not os.path.exists(crop_path) or force:
+        frames = natural_sort(glob.glob(os.path.join(data_path, '*jpg')))
+        frames_arr = frame_loader(frames, figure_shape,to_norm = False)
         print("augmenting " + data_path)
         os.makedirs(crop_path)
         for frame in frames_arr:
