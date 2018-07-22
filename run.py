@@ -37,8 +37,8 @@ def train_eval_network(dataset_name ,train_gen ,validate_gen ,test_x, test_y , s
         epochs=epochs,
         validation_data=validate_gen,
         validation_steps= int(float(len_valid) / float(batch_size)),
-        callbacks = [EarlyStopping(monitor='val_loss', min_delta=0.1, patience=30,),
-                     ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.001)
+        callbacks = [EarlyStopping(monitor='val_loss', min_delta=0.1, patience=15,),
+                     ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5, min_lr=1e-6)
     ]
     )
 
@@ -124,8 +124,8 @@ lstm = (ConvLSTM2D, dict(filters=256, kernel_size=(3, 3),padding='same', return_
 
 #hyper parameters for tunning the network
 optimizers =[(RMSprop,{}), (Adam, {})]
-dropouts =[0.0, 0.25, 0.5]
-learning_rates = [1e-3, 1e-4,1e-5, ] #1e-4, 1e-6
+dropouts =[0.25, 0.0,  0.5]
+learning_rates = [1e-3, 1e-4] #1e-4, 1e-6
 cnn_train_types = ['retrain','static'] #'retrain',],'static'
 cnns_arch = dict(ResNet50 = ResNet50,InceptionV3 =InceptionV3, VGG16 = VGG16,VGG19 = VGG19,)  #,InceptionV3 =InceptionV3, VGG19 = VGG19
 
