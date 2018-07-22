@@ -14,7 +14,7 @@ from numpy.random import seed
 from tensorflow import set_random_seed
 
 def train_eval_network(dataset_name ,train_gen ,validate_gen ,test_x, test_y , seq_len , epochs, batch_size, batch_epoch_ratio, initial_weights, size, cnn_arch, learning_rate,
-                       optimizer, cnn_train_type, pre_weights, lstm_conf, len_train, len_valid):
+                       optimizer, cnn_train_type, pre_weights, lstm_conf, len_train, len_valid, dropout):
         set_random_seed(2)
         seed(1)
         result = dict(dataset=dataset_name, cnn_train=cnn_train_type,
@@ -25,7 +25,7 @@ def train_eval_network(dataset_name ,train_gen ,validate_gen ,test_x, test_y , s
         model = BuildModel_basic.build(size=size, seq_len=seq_len, learning_rate=learning_rate,
                                        optimizer_class=optimizer, initial_weights=initial_weights,
                                        cnn_class=cnn_arch, pre_weights=pre_weights, lstm_conf=lstm_conf,
-                                       cnn_train_type=cnn_train_type)
+                                       cnn_train_type=cnn_train_type,dropout = dropout)
         history = model.fit_generator(
             steps_per_epoch=int(float(len_train) / float(batch_size * batch_epoch_ratio)),
             generator=train_gen,
@@ -64,12 +64,12 @@ def get_generators(dataset_videos, datasets_frames, fix_len, figure_size, force)
 
 
 def hyper_tune_network_(dataset_name, epochs, batch_size, batch_epoch_ratio, figure_size, initial_weights, lstm, cnns_arch,
-                       learning_rates, optimizers, cnn_train_types):
+                       learning_rates, optimizers, cnn_train_types,dropouts):
     results = []
     train_gen, validate_gen, test_x, test_y, seq_len, len_train, len_valid = get_generators(datasets_videos[dataset_name], datasets_frames, fix_len,
                                                                       figure_size, force=force)
 
-    best_accuracy = 0.5
+    best_accuracy = 0.0
 
 
     params_to_train = dict(dataset_name=dataset_name, train_gen=train_gen,
@@ -78,15 +78,21 @@ def hyper_tune_network_(dataset_name, epochs, batch_size, batch_epoch_ratio, fig
                       len_train = len_train, len_valid = len_valid,  pre_weights=weights, lstm_conf = lstm)
 
     exp_params_order = ['cnn_arch','learning_rate','optimizer','cnn_train_type']
-    exp_params = dict(optimizer= optimizers, learning_rate= learning_rates, cnn_train_type = cnn_train_types, cnn_arch = cnns_arch.values())
-    best_params = dict(optimizer=optimizers[0], learning_rate=learning_rates[0], cnn_train_type=cnn_train_types[0],cnn_arch=cnns_arch.values()[0])
 
+    best_params = dict(optimizer=optimizers[0], learning_rate=learning_rates[0],
+                       cnn_train_type=cnn_train_types[0],cnn_arch=cnns_arch.values()[0],
+                       dropout = dropouts[0])
+
+    exp_params = dict(optimizer=optimizers[1:], learning_rate=learning_rates[1:],
+                      cnn_train_type=cnn_train_types[1:],dropout = dropouts[1:],
+                      cnn_arch=cnns_arch.values())
     for exp_param in exp_params_order:
         temp_param = dict(best_params)
         for param in exp_params[exp_param]:
             temp_param[exp_param] = param
             params_to_train.update(temp_param)
             result = train_eval_network(**params_to_train)
+            print(result)
             results.append(result)
             if result['test accuracy'] > best_accuracy:
                 best_accuracy = result['test accuracy']
@@ -95,68 +101,70 @@ def hyper_tune_network_(dataset_name, epochs, batch_size, batch_epoch_ratio, fig
     return best_params, results
 
 
-def hyper_tune_network(dataset_name, epochs, batch_size, batch_epoch_ratio, figure_size, initial_weights, lstm, cnns_arch,
-                       learning_rates, optimizers, cnn_train_types):
-    results = []
-    train_gen, validate_gen, test_x, test_y, seq_len, len_train, len_valid = get_generators(datasets_videos[dataset_name], datasets_frames, fix_len,
-                                                                      figure_size, force=force)
-    hyper = dict()
-    best_accuracy = 0.5
-
-    exp_params = dict(dataset_name=dataset_name, train_gen=train_gen,
-                        validate_gen=validate_gen, test_x=test_x, test_y=test_y, seq_len=seq_len, epochs=epochs,
-                        batch_size=batch_size, batch_epoch_ratio=batch_epoch_ratio, initial_weights=initial_weights, size=figure_size,
-                      len_train = len_train, len_valid = len_valid)
-
-    for optimizer in optimizers:
-        hyper['optimizer'] = optimizer
-        if 'learning_rate' in hyper:
-            learning_rate = hyper['learning_rate']
-            cnn_train_type = hyper['cnn_train_type']
-            cnn_arch = hyper['cnn_arch']
-            result = train_eval_network(cnn_arch=cnn_arch, learning_rate=learning_rate,
-                                        optimizer=optimizer, cnn_train_type=cnn_train_type,
-                                        pre_weights=weights, lstm_conf=lstm, **exp_params)
-            results.append(result)
-            if result['test accuracy'] > best_accuracy:
-                best_accuracy = result['test accuracy']
-                hyper['optimizer'] = optimizer
-        else:
-            hyper['learning_rate'] = learning_rates[0]
-            for learning_rate in learning_rates:
-                if 'cnn_train_type' in hyper:
-                    cnn_train_type = hyper['cnn_train_type']
-                    cnn_arch = hyper['cnn_arch']
-                    result = train_eval_network(cnn_arch=cnn_arch, learning_rate=learning_rate,
-                                                optimizer=optimizer, cnn_train_type=cnn_train_type,
-                                                pre_weights=weights, lstm_conf=lstm, **exp_params)
-                    results.append(result)
-                    if result['test accuracy'] > best_accuracy:
-                        best_accuracy = result['test accuracy']
-                        hyper['learning_rate'] = learning_rate
-                else:
-                    hyper['cnn_train_type'] = cnn_train_types[0]
-                    for cnn_train_type in cnn_train_types:
-                        if 'cnn_arch' in hyper:
-                            cnn_arch = hyper['cnn_arch']
-                            result = train_eval_network(cnn_arch=cnn_arch, learning_rate=learning_rate,
-                                                        optimizer=optimizer, cnn_train_type=cnn_train_type,
-                                                        pre_weights=weights, lstm_conf=lstm, **exp_params)
-                            results.append(result)
-                            if result['test accuracy'] > best_accuracy:
-                                best_accuracy = result['test accuracy']
-                                hyper['cnn_train_type'] = cnn_train_type
-                        else:
-                            for cnn_arch_name,cnn_arch in cnns_arch.items():
-                                result = train_eval_network(cnn_arch=cnn_arch, learning_rate=learning_rate,
-                                                            optimizer=optimizer, cnn_train_type=cnn_train_type,
-                                                            pre_weights=weights, lstm_conf=lstm, **exp_params)
-                                results.append(result)
-                                if result['test accuracy'] > best_accuracy:
-                                    best_accuracy = result['test accuracy']
-                                    hyper['cnn_arch'] = cnn_arch
-
-    return hyper, results
+# def hyper_tune_network(dataset_name, epochs, batch_size, batch_epoch_ratio, figure_size, initial_weights, lstm, cnns_arch,
+#                        learning_rates, optimizers, cnn_train_types):
+#     results = []
+#     train_gen, validate_gen, test_x, test_y, seq_len, len_train, len_valid = get_generators(datasets_videos[dataset_name], datasets_frames, fix_len,
+#                                                                       figure_size, force=force)
+#     hyper = dict()
+#     best_accuracy = 0.5
+#
+#     exp_params = dict(dataset_name=dataset_name, train_gen=train_gen,
+#                         validate_gen=validate_gen, test_x=test_x, test_y=test_y, seq_len=seq_len, epochs=epochs,
+#                         batch_size=batch_size, batch_epoch_ratio=batch_epoch_ratio, initial_weights=initial_weights, size=figure_size,
+#                       len_train = len_train, len_valid = len_valid)
+#
+#     for optimizer in optimizers:
+#         hyper['optimizer'] = optimizer
+#         if 'learning_rate' in hyper:
+#             learning_rate = hyper['learning_rate']
+#             cnn_train_type = hyper['cnn_train_type']
+#             cnn_arch = hyper['cnn_arch']
+#             result = train_eval_network(cnn_arch=cnn_arch, learning_rate=learning_rate,
+#                                         optimizer=optimizer, cnn_train_type=cnn_train_type,
+#                                         pre_weights=weights, lstm_conf=lstm, **exp_params)
+#             print(result)
+#             results.append(result)
+#             if result['test accuracy'] > best_accuracy:
+#                 best_accuracy = result['test accuracy']
+#                 hyper['optimizer'] = optimizer
+#         else:
+#             hyper['learning_rate'] = learning_rates[0]
+#             for learning_rate in learning_rates:
+#                 if 'cnn_train_type' in hyper:
+#                     cnn_train_type = hyper['cnn_train_type']
+#                     cnn_arch = hyper['cnn_arch']
+#                     result = train_eval_network(cnn_arch=cnn_arch, learning_rate=learning_rate,
+#                                                 optimizer=optimizer, cnn_train_type=cnn_train_type,
+#                                                 pre_weights=weights, lstm_conf=lstm, **exp_params)
+#                     print(result)
+#                     results.append(result)
+#                     if result['test accuracy'] > best_accuracy:
+#                         best_accuracy = result['test accuracy']
+#                         hyper['learning_rate'] = learning_rate
+#                 else:
+#                     hyper['cnn_train_type'] = cnn_train_types[0]
+#                     for cnn_train_type in cnn_train_types:
+#                         if 'cnn_arch' in hyper:
+#                             cnn_arch = hyper['cnn_arch']
+#                             result = train_eval_network(cnn_arch=cnn_arch, learning_rate=learning_rate,
+#                                                         optimizer=optimizer, cnn_train_type=cnn_train_type,
+#                                                         pre_weights=weights, lstm_conf=lstm, **exp_params)
+#                             results.append(result)
+#                             if result['test accuracy'] > best_accuracy:
+#                                 best_accuracy = result['test accuracy']
+#                                 hyper['cnn_train_type'] = cnn_train_type
+#                         else:
+#                             for cnn_arch_name,cnn_arch in cnns_arch.items():
+#                                 result = train_eval_network(cnn_arch=cnn_arch, learning_rate=learning_rate,
+#                                                             optimizer=optimizer, cnn_train_type=cnn_train_type,
+#                                                             pre_weights=weights, lstm_conf=lstm, **exp_params)
+#                                 results.append(result)
+#                                 if result['test accuracy'] > best_accuracy:
+#                                     best_accuracy = result['test accuracy']
+#                                     hyper['cnn_arch'] = cnn_arch
+#
+#     return hyper, results
 
 
 datasets_videos = dict(hocky = dict(hocky ="data/raw_videos/HockeyFights"),
@@ -167,16 +175,17 @@ res_path = "results"
 figure_size = 244
 split_ratio = 0.8
 batch_size = 2
-batch_epoch_ratio = 4.
+batch_epoch_ratio = 2.
 fix_len = 20
 initial_weights = 'glorot_uniform'
 weights='imagenet'
 force = False
 
 optimizers =[(RMSprop,{}), (Adam, {})]
+dropouts =[0.0, 0.25, 0.5]
 learning_rates = [1e-3, 1e-4,1e-5, ] #1e-4, 1e-6
 cnn_train_types = ['retrain','static'] #'retrain',],'static'
-cnns_arch = dict(ResNet50 = ResNet50, VGG16 = VGG16,InceptionV3 =InceptionV3, VGG19 = VGG19,)  #,InceptionV3 =InceptionV3, VGG19 = VGG19
+cnns_arch = dict(ResNet50 = ResNet50,InceptionV3 =InceptionV3,)# VGG16 = VGG16,VGG19 = VGG19,)  #,InceptionV3 =InceptionV3, VGG19 = VGG19
 #Xception = Xception, ,InceptionV3 =InceptionV3)#VGG19 = VGG19)#, Xception = Xception, ResNet50 = ResNet50)#, InceptionV3 =InceptionV3)
 # Too big
 # Xception = Xception
@@ -192,21 +201,24 @@ cnns_arch = dict(ResNet50 = ResNet50, VGG16 = VGG16,InceptionV3 =InceptionV3, VG
 lstm = (ConvLSTM2D, dict(filters=256, kernel_size=(3, 3),padding='same', return_sequences=False))
 apply_hyper = True
 if apply_hyper:
-    hyper, results= hyper_tune_network_(dataset_name = 'hocky', epochs = 5,
-                           batch_size = batch_size, batch_epoch_ratio = batch_epoch_ratio,figure_size = figure_size,
+    #the hyper tunning symulate the architechture behavior
+    # we set the batch_epoch_ratio - reduced by X to have the hypertunning faster with epoches shorter
+    hyper, results= hyper_tune_network_(dataset_name = 'hocky', epochs = 1,
+                           batch_size = batch_size, batch_epoch_ratio = batch_epoch_ratio*10,figure_size = figure_size,
                            initial_weights = initial_weights, lstm = lstm,
                            cnns_arch = cnns_arch, learning_rates = learning_rates,
-                           optimizers = optimizers, cnn_train_types = cnn_train_types)
+                           optimizers = optimizers, cnn_train_types = cnn_train_types, dropouts = dropouts)
 
     pd.DataFrame(results).to_csv("hyper_results_3.csv")
 
-    cnn_arch, learning_rate,optimizer, cnn_train_type = hyper['cnn_arch'],\
+    cnn_arch, learning_rate,optimizer, cnn_train_type, dropout = hyper['cnn_arch'],\
                                                         hyper['learning_rate'],\
                                                         hyper['optimizer'],\
-                                                        hyper['cnn_train_type'],
+                                                        hyper['cnn_train_type'], \
+                                                        hyper['dropout']
 else:
     results = []
-    cnn_arch, learning_rate,optimizer, cnn_train_type = ResNet50, 0.0001, (RMSprop,dict(decay=0.5)), 'retrain'
+    cnn_arch, learning_rate,optimizer, cnn_train_type, dropout = ResNet50, 0.0001, (RMSprop,dict(decay=0.5)), 'retrain', 0.25
 for dataset_name, dataset_videos in datasets_videos.items():
     train_gen, validate_gen, test_x, test_y, seq_len, len_train, len_valid = get_generators(dataset_videos, datasets_frames,fix_len,figure_size, force = force)
     result = train_eval_network(epochs = 500, dataset_name = dataset_name,train_gen = train_gen,validate_gen = validate_gen,
@@ -214,7 +226,7 @@ for dataset_name, dataset_videos in datasets_videos.items():
                                 batch_epoch_ratio = batch_epoch_ratio,initial_weights = initial_weights,size = figure_size,
                                 cnn_arch = cnn_arch, learning_rate = learning_rate,
                                 optimizer = optimizer, cnn_train_type = cnn_train_type,
-                                pre_weights = weights, lstm_conf = lstm, len_train = len_train, len_valid = len_valid)
+                                pre_weights = weights, lstm_conf = lstm, len_train = len_train, len_valid = len_valid,dropout = dropout)
     results.append(result)
     pd.DataFrame(results).to_csv("results_3.csv")
     print(result)

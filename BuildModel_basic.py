@@ -19,7 +19,7 @@ def build(size, seq_len , learning_rate ,
           cnn_class ,\
           pre_weights , \
           lstm_conf , \
-          cnn_train_type):
+          cnn_train_type,dropout = 0.0):
     #Create CNN
 
     input_layer = Input(shape=(seq_len, size, size, 3))
@@ -51,15 +51,15 @@ def build(size, seq_len , learning_rate ,
     lstm = lstm_conf[0](**lstm_conf[1])(cnn)
     lstm = MaxPooling2D(pool_size=(2, 2))(lstm)
     flat = Flatten()(lstm)
-    flat = Dropout(0.5)(flat)
+    flat = Dropout(dropout)(flat)
     linear = Dense(1000)(flat)
     bn = BatchNormalization()(linear)
     relu = Activation('relu')(bn)
     linear = Dense(256)(relu)
-    linear = Dropout(0.5)(linear)
+    linear = Dropout(dropout)(linear)
     relu = Activation('relu')(linear)
     linear = Dense(10)(relu)
-    linear = Dropout(0.5)(linear)
+    linear = Dropout(dropout)(linear)
     relu = Activation('relu')(linear)
     predictions = Dense(1,  activation='sigmoid')(relu)
 
