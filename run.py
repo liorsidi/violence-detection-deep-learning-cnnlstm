@@ -1,4 +1,6 @@
 import os
+
+from keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from keras.optimizers import RMSprop, Adam
 
 import pandas as pd
@@ -7,10 +9,14 @@ from keras.layers import LSTM, ConvLSTM2D
 import BuildModel_basic
 import DatasetBuilder
 
+from numpy.random import seed
+
+from tensorflow import set_random_seed
 
 def train_eval_network(dataset_name ,train_gen ,validate_gen ,test_x, test_y , seq_len , epochs, batch_size, batch_epoch_ratio, initial_weights, size, cnn_arch, learning_rate,
                        optimizer, cnn_train_type, pre_weights, lstm_conf, len_train, len_valid):
-
+        set_random_seed(2)
+        seed(1)
         result = dict(dataset=dataset_name, cnn_train=cnn_train_type,
                       cnn=cnn_arch.__name__, lstm=lstm_conf[0].__name__, epochs=epochs,
                       learning_rate=learning_rate, batch_size=batch_size,
@@ -25,7 +31,10 @@ def train_eval_network(dataset_name ,train_gen ,validate_gen ,test_x, test_y , s
             generator=train_gen,
             epochs=epochs,
             validation_data=validate_gen,
-            validation_steps= int(float(len_valid) / float(batch_size) )
+            validation_steps= int(float(len_valid) / float(batch_size)),
+            callbacks = [EarlyStopping(monitor='val_loss', min_delta=0.1, patience=30,),
+                         ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.001)
+        ]
         )
 
         model_name = ""
@@ -164,10 +173,10 @@ initial_weights = 'glorot_uniform'
 weights='imagenet'
 force = False
 
-optimizers =[(RMSprop,dict(decay=0.5)), (Adam, {})]
-learning_rates = [1e-5,1e-4, 1e-6] #1e-4, 1e-6
+optimizers =[(RMSprop,{}), (Adam, {})]
+learning_rates = [1e-3, 1e-4,1e-5, ] #1e-4, 1e-6
 cnn_train_types = ['retrain','static'] #'retrain',],'static'
-cnns_arch = dict( VGG16 = VGG16,InceptionV3 =InceptionV3, VGG19 = VGG19)  #,InceptionV3 =InceptionV3, VGG19 = VGG19
+cnns_arch = dict(ResNet50 = ResNet50, VGG16 = VGG16,InceptionV3 =InceptionV3, VGG19 = VGG19,)  #,InceptionV3 =InceptionV3, VGG19 = VGG19
 #Xception = Xception, ,InceptionV3 =InceptionV3)#VGG19 = VGG19)#, Xception = Xception, ResNet50 = ResNet50)#, InceptionV3 =InceptionV3)
 # Too big
 # Xception = Xception
@@ -181,15 +190,15 @@ cnns_arch = dict( VGG16 = VGG16,InceptionV3 =InceptionV3, VGG19 = VGG19)  #,Ince
 # VGG16 = VGG16
 
 lstm = (ConvLSTM2D, dict(filters=256, kernel_size=(3, 3),padding='same', return_sequences=False))
-apply_hyper = False
+apply_hyper = True
 if apply_hyper:
-    hyper, results= hyper_tune_network_(dataset_name = 'hocky', epochs = 30,
+    hyper, results= hyper_tune_network_(dataset_name = 'hocky', epochs = 5,
                            batch_size = batch_size, batch_epoch_ratio = batch_epoch_ratio,figure_size = figure_size,
                            initial_weights = initial_weights, lstm = lstm,
                            cnns_arch = cnns_arch, learning_rates = learning_rates,
                            optimizers = optimizers, cnn_train_types = cnn_train_types)
 
-    pd.DataFrame(results).to_csv("hyper_results.csv")
+    pd.DataFrame(results).to_csv("hyper_results_3.csv")
 
     cnn_arch, learning_rate,optimizer, cnn_train_type = hyper['cnn_arch'],\
                                                         hyper['learning_rate'],\
@@ -197,17 +206,17 @@ if apply_hyper:
                                                         hyper['cnn_train_type'],
 else:
     results = []
-    cnn_arch, learning_rate,optimizer, cnn_train_type = VGG16, 0.0001, (Adam, {}), 'retrain'
+    cnn_arch, learning_rate,optimizer, cnn_train_type = ResNet50, 0.0001, (RMSprop,dict(decay=0.5)), 'retrain'
 for dataset_name, dataset_videos in datasets_videos.items():
     train_gen, validate_gen, test_x, test_y, seq_len, len_train, len_valid = get_generators(dataset_videos, datasets_frames,fix_len,figure_size, force = force)
-    result = train_eval_network(epochs = 100, dataset_name = dataset_name,train_gen = train_gen,validate_gen = validate_gen,
+    result = train_eval_network(epochs = 500, dataset_name = dataset_name,train_gen = train_gen,validate_gen = validate_gen,
                                 test_x= test_x, test_y = test_y, seq_len = seq_len,batch_size = batch_size,
                                 batch_epoch_ratio = batch_epoch_ratio,initial_weights = initial_weights,size = figure_size,
                                 cnn_arch = cnn_arch, learning_rate = learning_rate,
                                 optimizer = optimizer, cnn_train_type = cnn_train_type,
                                 pre_weights = weights, lstm_conf = lstm, len_train = len_train, len_valid = len_valid)
     results.append(result)
-    pd.DataFrame(results).to_csv("results_2.csv")
+    pd.DataFrame(results).to_csv("results_3.csv")
     print(result)
-pd.DataFrame(results).to_csv("results_2.csv")
+pd.DataFrame(results).to_csv("results_3.csv")
 
