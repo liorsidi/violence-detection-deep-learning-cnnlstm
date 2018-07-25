@@ -19,7 +19,8 @@ def build(size, seq_len , learning_rate ,
           cnn_class ,\
           pre_weights , \
           lstm_conf , \
-          cnn_train_type, classes = 1, dropout = 0.0):
+          cnn_train_type,dropout = 0.0):
+    optimizer = optimizer_class[0](lr=learning_rate, **optimizer_class[1])
     input_layer = Input(shape=(seq_len, size, size, 3))
     if(cnn_train_type!='train'):
         if cnn_class.__name__ == "ResNet50":
@@ -44,12 +45,10 @@ def build(size, seq_len , learning_rate ,
     lstm = lstm_conf[0](**lstm_conf[1])(cnn)
     lstm = MaxPooling2D(pool_size=(2, 2))(lstm)
     flat = Flatten()(lstm)
-
-    flat = BatchNormalization()(flat)
     flat = Dropout(dropout)(flat)
     linear = Dense(1000)(flat)
-
-    relu = Activation('relu')(linear)
+    bn = BatchNormalization()(linear)
+    relu = Activation('relu')(bn)
     linear = Dense(256)(relu)
     linear = Dropout(dropout)(linear)
     relu = Activation('relu')(linear)
@@ -57,17 +56,10 @@ def build(size, seq_len , learning_rate ,
     linear = Dropout(dropout)(linear)
     relu = Activation('relu')(linear)
 
-    activation = 'sigmoid'
-    loss_func = 'binary_crossentropy'
 
-    if classes > 1:
-        activation = 'softmax'
-        loss_func = 'categorical_crossentropy'
-    predictions = Dense(classes,  activation=activation)(relu)
-
+    predictions = Dense(2,  activation='softmax')(relu)
     model = Model(inputs=input_layer, outputs=predictions)
-    optimizer = optimizer_class[0](lr=learning_rate, **optimizer_class[1])
-    model.compile(optimizer=optimizer, loss=loss_func,metrics=['acc'])
+    model.compile(optimizer=optimizer, loss='categorical_crossentropy ',metrics=['acc'])
 
     print(model.summary())
 

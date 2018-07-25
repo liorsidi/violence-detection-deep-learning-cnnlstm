@@ -9,36 +9,38 @@ from keras.layers import LSTM, ConvLSTM2D
 import BuildModel_basic
 import DatasetBuilder
 
-from numpy.random import seed
+from numpy.random import seed, shuffle
 
 from tensorflow import set_random_seed
 
 def train_eval_network(dataset_name ,train_gen ,validate_gen ,test_x, test_y , seq_len , epochs, batch_size, batch_epoch_ratio, initial_weights, size, cnn_arch, learning_rate,
-                       optimizer, cnn_train_type, pre_weights, lstm_conf, len_train, len_valid, dropout):
+                       optimizer, cnn_train_type, pre_weights, lstm_conf, len_train, len_valid, dropout, classes):
     """the function build, compine fit and evaluate a certain architechtures on a dataset"""
     set_random_seed(2)
     seed(1)
     result = dict(dataset=dataset_name, cnn_train=cnn_train_type,
                   cnn=cnn_arch.__name__, lstm=lstm_conf[0].__name__, epochs=epochs,
-                  learning_rate=learning_rate, batch_size=batch_size,
+                  learning_rate=learning_rate, batch_size=batch_size, dropout = dropout,
                   optimizer=optimizer[0].__name__, initial_weights=initial_weights, seq_len=seq_len)
     print("run experimnt " + str(result))
     model = BuildModel_basic.build(size=size, seq_len=seq_len, learning_rate=learning_rate,
                                    optimizer_class=optimizer, initial_weights=initial_weights,
                                    cnn_class=cnn_arch, pre_weights=pre_weights, lstm_conf=lstm_conf,
-                                   cnn_train_type=cnn_train_type,dropout = dropout)
+                                   cnn_train_type=cnn_train_type,dropout = dropout, classes = classes)
 
     #the network is trained on data generatores and apply the callacks when the validation loss is not improving:
     # 1. early stop to training after n iteration
     # 2. reducing the learning rate after k iteration where k< n
+    patience_es = 15
+    patience_lr = 5
     history = model.fit_generator(
         steps_per_epoch=int(float(len_train) / float(batch_size * batch_epoch_ratio)),
         generator=train_gen,
         epochs=epochs,
         validation_data=validate_gen,
         validation_steps= int(float(len_valid) / float(batch_size)),
-        callbacks = [EarlyStopping(monitor='val_loss', min_delta=0.1, patience=15,),
-                     ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5, min_lr=1e-6)
+        callbacks = [EarlyStopping(monitor='val_loss', min_delta=0.001, patience=patience_es,),
+                     ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=patience_lr, min_lr=1e-8, verbose=1)
     ]
     )
 
@@ -50,36 +52,55 @@ def train_eval_network(dataset_name ,train_gen ,validate_gen ,test_x, test_y , s
     evals = model.evaluate(test_x, test_y, batch_size=batch_size)
     result['test loss'] = evals[0]
     result['test accuracy'] = evals[1]
+    result['validation loss'] = history.history['val_loss'][-1]
+    result['validation accuracy'] = history.history['val_acc'][-1]
+    result['train accuracy'] = history.history['acc'][-1]
+    result['train loss'] = history.history['loss'][-1]
+    result['final lr'] = history.history['lr'][-1]
+    result['total epochs'] = len(history.history['lr'])
     return result
 
 
-def get_generators(dataset_videos, datasets_frames, fix_len, figure_size, force):
+def get_generators(dataset_videos, datasets_frames, fix_len, figure_size, force, classes = 1):
     train_path, valid_path, test_path, \
     train_y, valid_y, test_y, \
-    avg_length = DatasetBuilder.createDataset(dataset_videos, datasets_frames, fix_len, force=force)
+    avg_length = DatasetBuilder.createDataset(dataset_videos, datasets_frames, fix_len, force=force, )
+
+    shuffle(train_path)
+    shuffle(valid_path)
+    shuffle(test_path)
+    shuffle(train_y)
+    shuffle(valid_y)
+    shuffle(test_y)
+
+    train_path, valid_path, test_path, \
+    train_y, valid_y, test_y, = train_path[:10], valid_path[:10], test_path[:10], \
+    train_y[:10], valid_y[:10], test_y[:10]
+
     if fix_len is not None:
         avg_length = fix_len
 
     len_train, len_valid = len(train_path), len(valid_path)
-    train_gen = DatasetBuilder.data_generator(train_path, train_y, batch_size, figure_size, avg_length)
-    validate_gen = DatasetBuilder.data_generator(valid_path, valid_y, batch_size, figure_size, avg_length)
-    test_x, test_y = DatasetBuilder.get_sequences(test_path, test_y, figure_size, avg_length)
+    train_gen = DatasetBuilder.data_generator(train_path, train_y, batch_size, figure_size, avg_length,classes=classes)
+    validate_gen = DatasetBuilder.data_generator(valid_path, valid_y, batch_size, figure_size, avg_length,classes=classes)
+    test_x, test_y = DatasetBuilder.get_sequences(test_path, test_y, figure_size, avg_length,classes=classes)
 
     return train_gen, validate_gen, test_x, test_y, avg_length, len_train, len_valid
 
 
 def hyper_tune_network(dataset_name, epochs, batch_size, batch_epoch_ratio, figure_size, initial_weights, lstm, cnns_arch,
-                       learning_rates, optimizers, cnn_train_types,dropouts):
+                       learning_rates, optimizers, cnn_train_types,dropouts,classes):
     """ the function train several networks parameters in a loop and select the best architechture to the next evaluation"""
     results = []
     train_gen, validate_gen, test_x, test_y, seq_len, len_train, len_valid = get_generators(datasets_videos[dataset_name], datasets_frames, fix_len,
-                                                                      figure_size, force=force)
+                                                                      figure_size, force=force, classes = classes)
     best_accuracy = 0.0
+    best_loss = 10.0
     #static params for tunning
     params_to_train = dict(dataset_name=dataset_name, train_gen=train_gen,
                         validate_gen=validate_gen, test_x=test_x, test_y=test_y, seq_len=seq_len, epochs=epochs,
                         batch_size=batch_size, batch_epoch_ratio=batch_epoch_ratio, initial_weights=initial_weights, size=figure_size,
-                      len_train = len_train, len_valid = len_valid,  pre_weights=weights, lstm_conf = lstm)
+                      len_train = len_train, len_valid = len_valid,  pre_weights=weights, lstm_conf = lstm, classes = classes)
 
     # the tunning is not evaluation all possible combinations
     # given the importance order of the hyperparams, in each iteraction we choose the best performing parmaters
@@ -100,8 +121,9 @@ def hyper_tune_network(dataset_name, epochs, batch_size, batch_epoch_ratio, figu
             result = train_eval_network(**params_to_train)
             print(result)
             results.append(result)
-            if result['test accuracy'] > best_accuracy:
+            if result['test accuracy'] >= best_accuracy and result['test loss'] <= best_loss :
                 best_accuracy = result['test accuracy']
+                best_loss = result['test loss']
                 best_params[exp_param] = param
                 print("best accuracy update " + str(best_accuracy))
     return best_params, results
@@ -109,35 +131,38 @@ def hyper_tune_network(dataset_name, epochs, batch_size, batch_epoch_ratio, figu
 #static parameter for the netwotk
 datasets_videos = dict(hocky = dict(hocky ="data/raw_videos/HockeyFights"),
                        violentflow=dict(violentflow="data/raw_videos/violentflow"),
-                       movies=dict(movies="data/raw_videos/movies"))
+                       # movies=dict(movies="data/raw_videos/movies")
+                       )
 datasets_frames = "data/raw_frames"
 res_path = "results"
 figure_size = 244
-split_ratio = 0.8
+#split_ratio = 0.1
 batch_size = 2
-batch_epoch_ratio = 2.
+batch_epoch_ratio = 0.1 #double the size because we use augmentation
 fix_len = 20
 initial_weights = 'glorot_uniform'
 weights='imagenet'
-force = False
+force = True
 lstm = (ConvLSTM2D, dict(filters=256, kernel_size=(3, 3),padding='same', return_sequences=False))
+classes = 1
 
 #hyper parameters for tunning the network
-optimizers =[(RMSprop,{}), (Adam, {})]
+optimizers =[(Adam, {}), (RMSprop,{})]
 dropouts =[0.25, 0.0,  0.5]
 learning_rates = [1e-3, 1e-4] #1e-4, 1e-6
 cnn_train_types = ['retrain','static'] #'retrain',],'static'
 cnns_arch = dict(ResNet50 = ResNet50,InceptionV3 =InceptionV3, VGG16 = VGG16,VGG19 = VGG19,)  #,InceptionV3 =InceptionV3, VGG19 = VGG19
 
-apply_hyper = True
+
+apply_hyper = False
 if apply_hyper:
     # the hyper tunning symulate the architechture behavior
     # we set the batch_epoch_ratio - reduced by X to have the hypertunning faster with epoches shorter
-    hyper, results= hyper_tune_network(dataset_name = 'hocky', epochs = 30,
-                           batch_size = batch_size, batch_epoch_ratio = batch_epoch_ratio*4,figure_size = figure_size,
+    hyper, results= hyper_tune_network(dataset_name = 'hocky', epochs = 50,
+                           batch_size = batch_size, batch_epoch_ratio = batch_epoch_ratio*2,figure_size = figure_size,
                            initial_weights = initial_weights, lstm = lstm,
                            cnns_arch = cnns_arch, learning_rates = learning_rates,
-                           optimizers = optimizers, cnn_train_types = cnn_train_types, dropouts = dropouts)
+                           optimizers = optimizers, cnn_train_types = cnn_train_types, dropouts = dropouts, classes = classes)
 
     pd.DataFrame(results).to_csv("hyper_results_3.csv")
     cnn_arch, learning_rate,optimizer, cnn_train_type, dropout = hyper['cnn_arch'],\
@@ -147,19 +172,20 @@ if apply_hyper:
                                                         hyper['dropout']
 else:
     results = []
-    cnn_arch, learning_rate,optimizer, cnn_train_type, dropout = ResNet50, 0.0001, (RMSprop,dict(decay=0.5)), 'retrain', 0.25
+    cnn_arch, learning_rate,optimizer, cnn_train_type, dropout = VGG19, 0.0001, (RMSprop,{}), 'retrain', 0.0
 
 # apply best architechture on all datasets with more epochs
 for dataset_name, dataset_videos in datasets_videos.items():
-    train_gen, validate_gen, test_x, test_y, seq_len, len_train, len_valid = get_generators(dataset_videos, datasets_frames,fix_len,figure_size, force = force)
-    result = train_eval_network(epochs = 500, dataset_name = dataset_name,train_gen = train_gen,validate_gen = validate_gen,
+
+    train_gen, validate_gen, test_x, test_y, seq_len, len_train, len_valid = get_generators(dataset_videos, datasets_frames,fix_len,figure_size, force = force, classes = classes)
+    result = train_eval_network(epochs = 50, dataset_name = dataset_name,train_gen = train_gen,validate_gen = validate_gen,
                                 test_x= test_x, test_y = test_y, seq_len = seq_len,batch_size = batch_size,
                                 batch_epoch_ratio = batch_epoch_ratio,initial_weights = initial_weights,size = figure_size,
                                 cnn_arch = cnn_arch, learning_rate = learning_rate,
                                 optimizer = optimizer, cnn_train_type = cnn_train_type,
-                                pre_weights = weights, lstm_conf = lstm, len_train = len_train, len_valid = len_valid,dropout = dropout)
+                                pre_weights = weights, lstm_conf = lstm, len_train = len_train, len_valid = len_valid,dropout = dropout,classes = classes)
     results.append(result)
-    pd.DataFrame(results).to_csv("results_3.csv")
+    pd.DataFrame(results).to_csv("results_5.csv")
     print(result)
-pd.DataFrame(results).to_csv("results_3.csv")
+pd.DataFrame(results).to_csv("results_5.csv")
 

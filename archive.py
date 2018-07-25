@@ -22,6 +22,7 @@ initial_weights = 'glorot_uniform'
 weights='imagenet'
 force = False
 
+
 optimizer =(RMSprop,dict(decay=0.5)) #Adam, {},
 learning_rates = [1e-4]
 cnn_train_types = ['retrain']#'static', 'train','retrain',],'static'
@@ -45,7 +46,7 @@ for dataset_name, dataset_videos in datasets_videos.items():
     # valid_X_, valid_y_ = DatasetBuilder.get_sequences(valid_path, valid_y, figure_size, avg_length)
     # validate_gen = DatasetBuilder.data_generator_files(valid_X_, valid_y_, batch_size)
 
-    test_x, test_y = DatasetBuilder.get_sequences(test_path, test_y, figure_size, avg_length)
+    test_x, test_y = DatasetBuilder.get_sequences(test_path, test_y, figure_size, avg_length, )
     for learning_rate in learning_rates:
         for cnn_train_type in cnn_train_types:
             for cnn_name, cnn_class in cnns_pretrained.items():
@@ -55,7 +56,7 @@ for dataset_name, dataset_videos in datasets_videos.items():
                     print("run experimnt " + str(result))
                     model = BuildModel_basic.build(size = figure_size, seq_len = avg_length, learning_rate = learning_rate,
                                                    optimizer_class = optimizer, initial_weights = initial_weights,
-                                             cnn_class = cnn_class,pre_weights = weights, lstm_conf = lstm_conf,cnn_train_type = cnn_train_type)
+                                             cnn_class = cnn_class,pre_weights = weights, lstm_conf = lstm_conf,cnn_train_type = cnn_train_type, classes= classes)
                     # if load_all:
                     #     model.fit(train_x, train_y, epochs=epochs,batch_size = batch_size)
                     # else:

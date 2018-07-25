@@ -6,6 +6,7 @@ import glob
 import numpy as np
 from keras.preprocessing.image import load_img, img_to_array
 from keras.preprocessing.sequence import pad_sequences
+from keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
 
 from keras.preprocessing import image
@@ -31,19 +32,10 @@ def save_figures_from_video(dataset_video_path, video_filename, suffix,figures_p
     files = []
     while success:
         success, figure = videoCapture.read()
+
         if seq_len % skip_frames == 0:
             if success:
-                if apply_norm:
-                    mean = [0.485, 0.456, 0.406]
-                    std = [0.229, 0.224, 0.225]
-                    figure = (figure - mean) / std
-                    if seq_len == 0:
-                        figure_ = (figure_ - mean) / std
-                if apply_diff:
-                    figure_curr = figure - figure_
-                    figure_ = figure
-                else:
-                    figure_curr = figure
+                figure_curr = figure
                 image_file = os.path.join(video_figures_path , "frame_%d.jpg" % seq_len)
                 files.append(image_file)
                 cv2.imwrite(image_file, figure_curr)
@@ -91,20 +83,20 @@ def createDataset(datasets_video_path, figure_output_path,fix_len, apply_aug = T
     avg_length = int(float(sum(videos_seq_length)) / max(len(videos_seq_length), 1))
 
     train_path, test_path, train_y, test_y =  train_test_split(videos_frames_paths,videos_labels, test_size=0.20, random_state=42)
-    train_path, valid_path, train_y, valid_y = train_test_split(train_path,train_y, test_size=0.10, random_state=42)
 
-    if apply_aug:
-        aug_paths = []
-        aug_y = []
-        for train_path_, train_y_ in zip(train_path,train_y):
+    # if apply_aug:
+    #     aug_paths = []
+    #     aug_y = []
+    #     for train_path_, train_y_ in zip(train_path,train_y):
+    #
+    #         aug_path = generate_augmentations(train_path_,force = False)
+    #         aug_paths.append(aug_path)
+    #         aug_y.append(train_y_)
+    #
+    #     train_path = train_path + aug_paths
+    #     train_y = train_y + aug_y
 
-            aug_path = generate_augmentations(train_path_,force = False)
-            aug_paths.append(aug_path)
-            aug_y.append(train_y_)
-
-        train_path = train_path + aug_paths
-        train_y = train_y + aug_y
-
+    train_path, valid_path, train_y, valid_y = train_test_split(train_path, train_y, test_size=0.20, random_state=42)
     return train_path,valid_path, test_path,\
            train_y, valid_y, test_y,\
            avg_length
@@ -114,22 +106,26 @@ def frame_loader(frames,figure_shape,to_norm = True):
     for frame in frames:
         image = load_img(frame, target_size=(figure_shape, figure_shape),interpolation='bilinear')
         img_arr = img_to_array(image)
-        if to_norm:
-            x = (img_arr / 255.).astype(np.float32)
-        else:
-            x = img_arr
-        output_frames.append(x)
+        # Scale
+        figure = (img_arr / 255.).astype(np.float32)
+        # Normalize
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+        figure = (figure - mean) / std
+        output_frames.append(figure)
     return output_frames
 
 
-def data_generator(data_paths,labels,batch_size,figure_shape,seq_length):
+def data_generator(data_paths,labels,batch_size,figure_shape,seq_length,classes = 1):
     while True:
         indexes = np.arange(len(data_paths))
         np.random.shuffle(indexes)
         select_indexes = indexes[:batch_size]
         data_paths_batch = [data_paths[i] for i in select_indexes]
         labels_batch = [labels[i] for i in select_indexes]
-        X, y = get_sequences(data_paths_batch,labels_batch,figure_shape,seq_length)
+
+        X, y = get_sequences(data_paths_batch,labels_batch,figure_shape,seq_length, classes, use_augmentation = False)
+
         yield X, y
 
 def data_generator_files(data,labels,batch_size):
@@ -141,14 +137,23 @@ def data_generator_files(data,labels,batch_size):
         y = [labels[i] for i in select_indexes]
         yield X, y
 
-def get_sequences(data_paths,labels,figure_shape,seq_length):
+def get_sequences(data_paths,labels,figure_shape,seq_length,classes=1, use_augmentation = False):
     X, y = [], []
+    seq_len = 0
     for data_path, label in zip(data_paths,labels):
         frames = sorted(glob.glob(os.path.join(data_path, '*jpg')))
         x = frame_loader(frames, figure_shape)
+        if use_augmentation:
+            rand = scipy.random.random()
+            if rand > 0.5:
+                x = [frame.transpose(1, 0, 2) for frame in x]
+        x = [x[i] - x[i+1] for i in range(len(x)-1)]
+
         X.append(x)
         y.append(label)
     X = pad_sequences(X, maxlen=seq_length, padding='pre', truncating='pre')
+    if classes > 1:
+        y = to_categorical(y,classes)
     return np.array(X), np.array(y)
 
 import re
@@ -158,21 +163,23 @@ def natural_sort(l):
     alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ]
     return sorted(l, key = alphanum_key)
 
-def generate_augmentations(data_path,figure_shape = 244, force = False):
-    seq_len = 0
-    crop_path = data_path + "_crop"
-    if not os.path.exists(crop_path) or force:
-        frames = natural_sort(glob.glob(os.path.join(data_path, '*jpg')))
-        frames_arr = frame_loader(frames, figure_shape,to_norm = False)
-        print("augmenting " + data_path)
-        os.makedirs(crop_path)
-        for frame in frames_arr:
-            #transpose
-            img_transpose = frame.transpose(1,0,2)
-            data_path_aug = os.path.join(crop_path,"frame_%d.jpg" % seq_len)
-            cv2.imwrite(data_path_aug, img_transpose)
-            seq_len += 1
-    return crop_path
+
+
+# def generate_augmentations(data_path,figure_shape = 244, force = False):
+#     seq_len = 0
+#     crop_path = data_path + "_crop"
+#     if not os.path.exists(crop_path) or force:
+#         frames = natural_sort(glob.glob(os.path.join(data_path, '*jpg')))
+#         frames_arr = frame_loader(frames, figure_shape,to_norm = False)
+#         print("augmenting " + data_path)
+#         os.makedirs(crop_path)
+#         for frame in frames_arr:
+#             #transpose
+#             img_transpose = frame.transpose(1,0,2)
+#             data_path_aug = os.path.join(crop_path,"frame_%d.jpg" % seq_len)
+#             cv2.imwrite(data_path_aug, img_transpose)
+#             seq_len += 1
+#     return crop_path
 
 # def load_data(data_paths,labels,figure_shape,seq_length):
 #     X, y = [], []
