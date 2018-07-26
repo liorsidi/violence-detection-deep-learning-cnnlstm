@@ -188,7 +188,7 @@ def crop_img(img,figure_shape,percentage=0.8,corner="Left_up"):
     return img
 
 
-def get_sequences(data_paths,labels,figure_shape,seq_length,classes=1, use_augmentation = False,use_crop=False):
+def get_sequences(data_paths,labels,figure_shape,seq_length,classes=1, use_augmentation = False,use_crop=True):
     X, y = [], []
     seq_len = 0
     for data_path, label in zip(data_paths,labels):

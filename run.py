@@ -61,7 +61,7 @@ def train_eval_network(dataset_name ,train_gen ,validate_gen ,test_x, test_y , s
     return result
 
 
-def get_generators(dataset_videos, datasets_frames, fix_len, figure_size, force, classes = 1, use_aug = False ,use_crop =False):
+def get_generators(dataset_videos, datasets_frames, fix_len, figure_size, force, classes = 1, use_aug = False ,use_crop =True):
     train_path, valid_path, test_path, \
     train_y, valid_y, test_y, \
     avg_length = DatasetBuilder.createDataset(dataset_videos, datasets_frames, fix_len, force=force)
@@ -126,6 +126,8 @@ def hyper_tune_network(dataset_name, epochs, batch_size, batch_epoch_ratio, figu
             else:
                 temp_param[exp_param] = param
 
+            print(temp_param_data)
+            print(temp_param)
             params_to_train['train_gen'], params_to_train['validate_gen'], params_to_train['test_x'], \
             params_to_train['test_y'], params_to_train['seq_len'], params_to_train['len_train'], \
             params_to_train['len_valid'] = get_generators(datasets_videos[dataset_name], datasets_frames, temp_param_data['fix_len'],
@@ -162,7 +164,7 @@ batch_epoch_ratio = 0.5 #double the size because we use augmentation
 #fix_len = 20
 initial_weights = 'glorot_uniform'
 weights='imagenet'
-force = False
+force = True
 lstm = (ConvLSTM2D, dict(filters=256, kernel_size=(3, 3),padding='same', return_sequences=False))
 classes = 1
 
@@ -176,12 +178,15 @@ optimizers =[ (RMSprop,{}),(Adam, {})]
 dropouts =[0.0, 0.5]
 cnn_train_types = ['retrain','static'] #'retrain',],'static'
 
+PATH='/home/ise/cuda/${PATH:+:${PATH}}'
+LD_LIBRARY_PATH='/home/ise/cuda/lib64/${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}'
+
 apply_hyper = False
 if apply_hyper:
     # the hyper tunning symulate the architechture behavior
     # we set the batch_epoch_ratio - reduced by X to have the hypertunning faster with epoches shorter
-    hyper, results= hyper_tune_network(dataset_name = 'hocky', epochs = 30,
-                           batch_size = batch_size, batch_epoch_ratio = batch_epoch_ratio*2,figure_size = figure_size,
+    hyper, results= hyper_tune_network(dataset_name = 'hocky', epochs = 1,
+                           batch_size = batch_size, batch_epoch_ratio = batch_epoch_ratio*20,figure_size = figure_size,
                            initial_weights = initial_weights, lstm = lstm,
                            cnns_arch = cnns_arch, learning_rates = learning_rates,
                            optimizers = optimizers, cnn_train_types = cnn_train_types, dropouts = dropouts, classes = classes,use_augs = use_augs,fix_lens = fix_lens)
