@@ -8,7 +8,7 @@ from keras.preprocessing.image import load_img, img_to_array
 from keras.preprocessing.sequence import pad_sequences
 from keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
-
+from collections import defaultdict
 from keras.preprocessing import image
 import random
 
@@ -122,7 +122,7 @@ def frame_loader(frames,figure_shape,to_norm = True):
     return output_frames
 
 
-def data_generator(data_paths,labels,batch_size,figure_shape,seq_length,use_aug,use_crop,classes = 1):
+def data_generator(data_paths,labels,batch_size,figure_shape,seq_length,use_aug,use_crop,crop_x_y,classes = 1):
     while True:
         indexes = np.arange(len(data_paths))
         np.random.shuffle(indexes)
@@ -130,7 +130,7 @@ def data_generator(data_paths,labels,batch_size,figure_shape,seq_length,use_aug,
         data_paths_batch = [data_paths[i] for i in select_indexes]
         labels_batch = [labels[i] for i in select_indexes]
 
-        X, y = get_sequences(data_paths_batch,labels_batch,figure_shape,seq_length, classes, use_augmentation = use_aug,use_crop=use_crop)
+        X, y = get_sequences(data_paths_batch,labels_batch,figure_shape,seq_length, classes, use_augmentation = use_aug,use_crop=use_crop,crop_x_y=crop_x_y)
 
         yield X, y
 
@@ -142,6 +142,13 @@ def data_generator_files(data,labels,batch_size):
         X = [data[i] for i in select_indexes]
         y = [labels[i] for i in select_indexes]
         yield X, y
+
+def crop_img__remove_Dark(img,x_crop,y_crop,x,y,figure_size):
+    x_start = x_crop
+    x_end = x-x_crop
+    y_start = y_crop
+    y_end = y-y_crop
+    return cv2.resize(img[y_start:y_end,x_start:x_end,:],(figure_size,figure_size))
 
 
 def crop_img(img,figure_shape,percentage=0.8,corner="Left_up"):
@@ -184,18 +191,21 @@ def crop_img(img,figure_shape,percentage=0.8,corner="Left_up"):
         y_start = half
         y_end = figure_shape-half
 
-    img = cv2.resize(img[x_start:x_end, y_start:y_end, :], (figure_shape, figure_shape))
+    img = cv2.resize(img[y_start:y_end,x_start:x_end, :], (figure_shape, figure_shape))
     return img
 
 
-def get_sequences(data_paths,labels,figure_shape,seq_length,classes=1, use_augmentation = False,use_crop=True):
+def get_sequences(data_paths,labels,figure_shape,seq_length,classes=1, use_augmentation = False,use_crop=True,crop_x_y=None):
     X, y = [], []
     seq_len = 0
     for data_path, label in zip(data_paths,labels):
         frames = sorted(glob.glob(os.path.join(data_path, '*jpg')))
         x = frame_loader(frames, figure_shape)
+        if(crop_x_y):
+            x = [crop_img__remove_Dark(y,crop_x_y[0],crop_x_y[1],y.shape[0],y.shape[1],figure_shape) for y in x]
         if use_augmentation:
             rand = scipy.random.random()
+            corner=""
             if rand > 0.5:
                 if(use_crop):
                     corner=random.choice(corner_keys)

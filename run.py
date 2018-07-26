@@ -13,6 +13,8 @@ import DatasetBuilder
 from numpy.random import seed, shuffle
 
 from tensorflow import set_random_seed
+from collections import defaultdict
+
 
 def train_eval_network(dataset_name ,train_gen ,validate_gen ,test_x, test_y , seq_len , epochs, batch_size, batch_epoch_ratio, initial_weights, size, cnn_arch, learning_rate,
                        optimizer, cnn_train_type, pre_weights, lstm_conf, len_train, len_valid, dropout, classes,patience_es = 15,patience_lr = 5):
@@ -61,7 +63,7 @@ def train_eval_network(dataset_name ,train_gen ,validate_gen ,test_x, test_y , s
     return result
 
 
-def get_generators(dataset_videos, datasets_frames, fix_len, figure_size, force, classes = 1, use_aug = False ,use_crop =True):
+def get_generators(dataset_name,dataset_videos, datasets_frames, fix_len, figure_size, force, classes = 1, use_aug = False ,use_crop =True,crop_dark=None):
     train_path, valid_path, test_path, \
     train_y, valid_y, test_y, \
     avg_length = DatasetBuilder.createDataset(dataset_videos, datasets_frames, fix_len, force=force)
@@ -79,11 +81,14 @@ def get_generators(dataset_videos, datasets_frames, fix_len, figure_size, force,
 
     if fix_len is not None:
         avg_length = fix_len
+    crop_x_y = None
+    if(crop_dark):
+        crop_x_y = crop_dark[dataset_name]
 
     len_train, len_valid = len(train_path), len(valid_path)
-    train_gen = DatasetBuilder.data_generator(train_path, train_y, batch_size, figure_size, avg_length,use_aug=use_aug,use_crop=use_crop, classes=classes)
-    validate_gen = DatasetBuilder.data_generator(valid_path, valid_y, batch_size, figure_size, avg_length,use_aug = False ,use_crop=False, classes=classes)
-    test_x, test_y = DatasetBuilder.get_sequences(test_path, test_y, figure_size, avg_length,classes=classes)
+    train_gen = DatasetBuilder.data_generator(train_path, train_y, batch_size, figure_size, avg_length,use_aug=use_aug,use_crop=use_crop, crop_x_y=crop_x_y,classes=classes)
+    validate_gen = DatasetBuilder.data_generator(valid_path, valid_y, batch_size, figure_size, avg_length,use_aug = False ,use_crop=False, crop_x_y=crop_x_y,classes=classes)
+    test_x, test_y = DatasetBuilder.get_sequences(test_path, test_y, figure_size, avg_length,crop_x_y=crop_x_y,classes=classes)
 
     return train_gen, validate_gen, test_x, test_y, avg_length, len_train, len_valid
 
@@ -130,7 +135,7 @@ def hyper_tune_network(dataset_name, epochs, batch_size, batch_epoch_ratio, figu
             print(temp_param)
             params_to_train['train_gen'], params_to_train['validate_gen'], params_to_train['test_x'], \
             params_to_train['test_y'], params_to_train['seq_len'], params_to_train['len_train'], \
-            params_to_train['len_valid'] = get_generators(datasets_videos[dataset_name], datasets_frames, temp_param_data['fix_len'],
+            params_to_train['len_valid'] = get_generators(dataset_name,datasets_videos[dataset_name], datasets_frames, temp_param_data['fix_len'],
                                                           figure_size, use_aug=temp_param_data['use_aug'], force=force,
                                                           classes=classes)
 
@@ -155,6 +160,14 @@ datasets_videos = dict(
                        # violentflow=dict(violentflow="data/raw_videos/violentflow"),
                        #  movies=dict(movies="data/raw_videos/movies")
                        )
+
+crop_dark=dict(
+    hocky=(11,38),
+    violentflow=None,
+    movies = None
+)
+
+
 datasets_frames = "data/raw_frames"
 res_path = "results"
 figure_size = 244
@@ -181,6 +194,7 @@ cnn_train_types = ['retrain','static'] #'retrain',],'static'
 
 
 apply_hyper = False
+
 if apply_hyper:
     # the hyper tunning symulate the architechture behavior
     # we set the batch_epoch_ratio - reduced by X to have the hypertunning faster with epoches shorter
@@ -203,7 +217,8 @@ else:
 # apply best architechture on all datasets with more epochs
 for dataset_name, dataset_videos in datasets_videos.items():
 
-    train_gen, validate_gen, test_x, test_y, seq_len, len_train, len_valid = get_generators(dataset_videos, datasets_frames,fix_len,figure_size, force = force, classes = classes, use_aug= use_aug ,use_crop = use_crop)
+    train_gen, validate_gen, test_x, test_y, seq_len, len_train, len_valid = get_generators(dataset_name,dataset_videos, datasets_frames,fix_len,figure_size, \
+                                                                                            force = force, classes = classes, use_aug= use_aug ,use_crop = use_crop,crop_dark=crop_dark)
     result = train_eval_network(epochs = 50, dataset_name = dataset_name,train_gen = train_gen,validate_gen = validate_gen,
                                 test_x= test_x, test_y = test_y, seq_len = seq_len,batch_size = batch_size,
                                 batch_epoch_ratio = batch_epoch_ratio,initial_weights = initial_weights,size = figure_size,
