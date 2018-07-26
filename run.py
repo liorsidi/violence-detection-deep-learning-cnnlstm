@@ -178,8 +178,7 @@ optimizers =[ (RMSprop,{}),(Adam, {})]
 dropouts =[0.0, 0.5]
 cnn_train_types = ['retrain','static'] #'retrain',],'static'
 
-PATH='/home/ise/cuda/${PATH:+:${PATH}}'
-LD_LIBRARY_PATH='/home/ise/cuda/lib64/${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}'
+
 
 apply_hyper = False
 if apply_hyper:
