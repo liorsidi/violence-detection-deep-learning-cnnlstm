@@ -45,13 +45,13 @@ def save_figures_from_video(dataset_video_path, video_filename, suffix,figures_p
 
     return video_images
 
-def createDataset(datasets_video_path, figure_output_path,fix_len, apply_aug = True, force = False):
+def createDataset(datasets_video_path, figure_output_path,fix_len, force = False):
     videos_seq_length = []
     datasets_images = {}
     videos_frames_paths = []
     videos_labels = []
     #Extract images for each video for each dataset
-    for dataset_name, dataset_video_path in datasets_video_path.iteritems():
+    for dataset_name, dataset_video_path in datasets_video_path.items():
         dataset_figures_path = os.path.join(figure_output_path,dataset_name)
         if not os.path.exists(dataset_figures_path):
             os.makedirs(dataset_figures_path)
@@ -116,7 +116,7 @@ def frame_loader(frames,figure_shape,to_norm = True):
     return output_frames
 
 
-def data_generator(data_paths,labels,batch_size,figure_shape,seq_length,classes = 1):
+def data_generator(data_paths,labels,batch_size,figure_shape,seq_length,use_aug,classes = 1):
     while True:
         indexes = np.arange(len(data_paths))
         np.random.shuffle(indexes)
@@ -124,7 +124,7 @@ def data_generator(data_paths,labels,batch_size,figure_shape,seq_length,classes 
         data_paths_batch = [data_paths[i] for i in select_indexes]
         labels_batch = [labels[i] for i in select_indexes]
 
-        X, y = get_sequences(data_paths_batch,labels_batch,figure_shape,seq_length, classes, use_augmentation = False)
+        X, y = get_sequences(data_paths_batch,labels_batch,figure_shape,seq_length, classes, use_augmentation = use_aug)
 
         yield X, y
 
