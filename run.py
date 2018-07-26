@@ -61,7 +61,7 @@ def train_eval_network(dataset_name ,train_gen ,validate_gen ,test_x, test_y , s
     return result
 
 
-def get_generators(dataset_videos, datasets_frames, fix_len, figure_size, force, classes = 1, use_aug = True ):
+def get_generators(dataset_videos, datasets_frames, fix_len, figure_size, force, classes = 1, use_aug = False ,use_crop =False):
     train_path, valid_path, test_path, \
     train_y, valid_y, test_y, \
     avg_length = DatasetBuilder.createDataset(dataset_videos, datasets_frames, fix_len, force=force)
@@ -81,8 +81,8 @@ def get_generators(dataset_videos, datasets_frames, fix_len, figure_size, force,
         avg_length = fix_len
 
     len_train, len_valid = len(train_path), len(valid_path)
-    train_gen = DatasetBuilder.data_generator(train_path, train_y, batch_size, figure_size, avg_length,use_aug, classes=classes)
-    validate_gen = DatasetBuilder.data_generator(valid_path, valid_y, batch_size, figure_size, avg_length,False , classes=classes)
+    train_gen = DatasetBuilder.data_generator(train_path, train_y, batch_size, figure_size, avg_length,use_aug=use_aug,use_crop=use_crop, classes=classes)
+    validate_gen = DatasetBuilder.data_generator(valid_path, valid_y, batch_size, figure_size, avg_length,use_aug = False ,use_crop=False, classes=classes)
     test_x, test_y = DatasetBuilder.get_sequences(test_path, test_y, figure_size, avg_length,classes=classes)
 
     return train_gen, validate_gen, test_x, test_y, avg_length, len_train, len_valid
@@ -150,8 +150,8 @@ def hyper_tune_network(dataset_name, epochs, batch_size, batch_epoch_ratio, figu
 #static parameter for the netwotk
 datasets_videos = dict(
     hocky = dict(hocky ="data/raw_videos/HockeyFights"),
-                       violentflow=dict(violentflow="data/raw_videos/violentflow"),
-                        movies=dict(movies="data/raw_videos/movies")
+                       # violentflow=dict(violentflow="data/raw_videos/violentflow"),
+                       #  movies=dict(movies="data/raw_videos/movies")
                        )
 datasets_frames = "data/raw_frames"
 res_path = "results"
@@ -194,12 +194,12 @@ if apply_hyper:
                                                         hyper['dropout'], hyper['use_aug'], hyper['seq_len'],
 else:
     results = []
-    cnn_arch, learning_rate,optimizer, cnn_train_type, dropout, use_aug, fix_len = ResNet50, 0.0001, (RMSprop,{}), 'retrain', 0.0, False, 20
+    cnn_arch, learning_rate,optimizer, cnn_train_type, dropout, use_aug, fix_len ,use_crop = ResNet50, 0.0001, (RMSprop,{}), 'retrain', 0.0, True, 20 ,True
 
 # apply best architechture on all datasets with more epochs
 for dataset_name, dataset_videos in datasets_videos.items():
 
-    train_gen, validate_gen, test_x, test_y, seq_len, len_train, len_valid = get_generators(dataset_videos, datasets_frames,fix_len,figure_size, force = force, classes = classes, use_aug= use_aug)
+    train_gen, validate_gen, test_x, test_y, seq_len, len_train, len_valid = get_generators(dataset_videos, datasets_frames,fix_len,figure_size, force = force, classes = classes, use_aug= use_aug ,use_crop = use_crop)
     result = train_eval_network(epochs = 50, dataset_name = dataset_name,train_gen = train_gen,validate_gen = validate_gen,
                                 test_x= test_x, test_y = test_y, seq_len = seq_len,batch_size = batch_size,
                                 batch_epoch_ratio = batch_epoch_ratio,initial_weights = initial_weights,size = figure_size,

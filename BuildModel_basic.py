@@ -39,8 +39,8 @@ def build(size, seq_len , learning_rate ,
 
     cnn = TimeDistributed(cnn)(input_layer)
     #the resnet output shape is 1,1,20148 and need to be reshape for the ConvLSTM filters
-    if cnn_class.__name__ == "ResNet50":
-        cnn = Reshape((seq_len,4, 4, 128), input_shape=(seq_len,1, 1, 2048))(cnn)
+    # if cnn_class.__name__ == "ResNet50":
+        # cnn = Reshape((seq_len,4, 4, 128), input_shape=(seq_len,1, 1, 2048))(cnn)
     lstm = lstm_conf[0](**lstm_conf[1])(cnn)
     lstm = MaxPooling2D(pool_size=(2, 2))(lstm)
     flat = Flatten()(lstm)

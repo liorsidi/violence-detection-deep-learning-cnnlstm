@@ -10,6 +10,11 @@ from keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
 
 from keras.preprocessing import image
+import random
+
+corner_keys = ["Center","Left_up","Left_down","Right_up","Right_down"]
+
+Debug_Print_AUG=True
 
 def save_figures_from_video(dataset_video_path, video_filename, suffix,figures_path,skip_frames = 25,apply_norm = True, apply_diff = True,fix_len = None):
     seq_len = 0
@@ -101,6 +106,7 @@ def createDataset(datasets_video_path, figure_output_path,fix_len, force = False
            train_y, valid_y, test_y,\
            avg_length
 
+
 def frame_loader(frames,figure_shape,to_norm = True):
     output_frames = []
     for frame in frames:
@@ -116,7 +122,7 @@ def frame_loader(frames,figure_shape,to_norm = True):
     return output_frames
 
 
-def data_generator(data_paths,labels,batch_size,figure_shape,seq_length,use_aug,classes = 1):
+def data_generator(data_paths,labels,batch_size,figure_shape,seq_length,use_aug,use_crop,classes = 1):
     while True:
         indexes = np.arange(len(data_paths))
         np.random.shuffle(indexes)
@@ -124,7 +130,7 @@ def data_generator(data_paths,labels,batch_size,figure_shape,seq_length,use_aug,
         data_paths_batch = [data_paths[i] for i in select_indexes]
         labels_batch = [labels[i] for i in select_indexes]
 
-        X, y = get_sequences(data_paths_batch,labels_batch,figure_shape,seq_length, classes, use_augmentation = use_aug)
+        X, y = get_sequences(data_paths_batch,labels_batch,figure_shape,seq_length, classes, use_augmentation = use_aug,use_crop=use_crop)
 
         yield X, y
 
@@ -137,7 +143,52 @@ def data_generator_files(data,labels,batch_size):
         y = [labels[i] for i in select_indexes]
         yield X, y
 
-def get_sequences(data_paths,labels,figure_shape,seq_length,classes=1, use_augmentation = False):
+
+def crop_img(img,figure_shape,percentage=0.8,corner="Left_up"):
+    if(corner == None):
+        corner = random.choice(corner_keys)
+
+    if corner not in corner_keys:
+        raise ValueError(
+            'Invalid corner method {} specified. Supported '
+            'corners are {}'.format(
+                corner,
+                ", ".join(corner_keys)))
+
+    resize = int(figure_shape*percentage)
+
+    if(corner =="Left_up"):
+        x_start = 0
+        x_end = resize
+        y_start = 0
+        y_end = resize
+    if (corner == "Right_down"):
+        x_start = figure_shape-resize
+        x_end = figure_shape
+        y_start = figure_shape-resize
+        y_end = figure_shape
+    if(corner =="Right_up"):
+        x_start = 0
+        x_end = resize
+        y_start = figure_shape-resize
+        y_end = figure_shape
+    if (corner == "Left_down"):
+        x_start = figure_shape-resize
+        x_end = figure_shape
+        y_start = 0
+        y_end = resize
+    if (corner == "Center"):
+        half = int(figure_shape*(1-percentage))
+        x_start = half
+        x_end = figure_shape-half
+        y_start = half
+        y_end = figure_shape-half
+
+    img = cv2.resize(img[x_start:x_end, y_start:y_end, :], (figure_shape, figure_shape))
+    return img
+
+
+def get_sequences(data_paths,labels,figure_shape,seq_length,classes=1, use_augmentation = False,use_crop=False):
     X, y = [], []
     seq_len = 0
     for data_path, label in zip(data_paths,labels):
@@ -146,9 +197,14 @@ def get_sequences(data_paths,labels,figure_shape,seq_length,classes=1, use_augme
         if use_augmentation:
             rand = scipy.random.random()
             if rand > 0.5:
+                if(use_crop):
+                    corner=random.choice(corner_keys)
+                    x = [crop_img(y,figure_shape,0.7,corner) for y in x]
                 x = [frame.transpose(1, 0, 2) for frame in x]
+                if(Debug_Print_AUG):
+                    to_write = [list(a) for a in zip(frames, x)]
+                    [cv2.imwrite(x[0] + "_" + corner, x[1] * 255) for x in to_write]
         x = [x[i] - x[i+1] for i in range(len(x)-1)]
-
         X.append(x)
         y.append(label)
     X = pad_sequences(X, maxlen=seq_length, padding='pre', truncating='pre')
