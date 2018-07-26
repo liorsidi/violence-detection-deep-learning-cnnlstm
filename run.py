@@ -148,9 +148,10 @@ def hyper_tune_network(dataset_name, epochs, batch_size, batch_epoch_ratio, figu
     return best_params_train.update(best_params_data), results
 
 #static parameter for the netwotk
-datasets_videos = dict(hocky = dict(hocky ="data/raw_videos/HockeyFights"),
+datasets_videos = dict(
+    hocky = dict(hocky ="data/raw_videos/HockeyFights"),
                        violentflow=dict(violentflow="data/raw_videos/violentflow"),
-                       # movies=dict(movies="data/raw_videos/movies")
+                        movies=dict(movies="data/raw_videos/movies")
                        )
 datasets_frames = "data/raw_frames"
 res_path = "results"
@@ -185,7 +186,7 @@ if apply_hyper:
                            cnns_arch = cnns_arch, learning_rates = learning_rates,
                            optimizers = optimizers, cnn_train_types = cnn_train_types, dropouts = dropouts, classes = classes,use_augs = use_augs,fix_lens = fix_lens)
 
-    pd.DataFrame(results).to_csv("hyper_results_3.csv")
+    pd.DataFrame(results).to_csv("results_hyper.csv")
     cnn_arch, learning_rate,optimizer, cnn_train_type, dropout, use_aug, fix_len = hyper['cnn_arch'],\
                                                         hyper['learning_rate'],\
                                                         hyper['optimizer'],\
@@ -206,7 +207,7 @@ for dataset_name, dataset_videos in datasets_videos.items():
                                 optimizer = optimizer, cnn_train_type = cnn_train_type,
                                 pre_weights = weights, lstm_conf = lstm, len_train = len_train, len_valid = len_valid,dropout = dropout,classes = classes)
     results.append(result)
-    pd.DataFrame(results).to_csv("results_5.csv")
+    pd.DataFrame(results).to_csv("results_datasets.csv")
     print(result)
-pd.DataFrame(results).to_csv("results_5.csv")
+pd.DataFrame(results).to_csv("results.csv")
 
