@@ -160,7 +160,7 @@ def hyper_tune_network(dataset_name, epochs, batch_size, batch_epoch_ratio, figu
             result.update(temp_param_data)
             print(result)
             results.append(result)
-            if result['test accuracy'] >= best_accuracy and result['test loss'] <= best_loss :
+            if result['test accuracy'] >= best_accuracy :# and result['test loss'] <= best_loss :
                 best_accuracy = result['test accuracy']
                 best_loss = result['test loss']
                 if exp_param in best_params_data:
@@ -173,9 +173,9 @@ def hyper_tune_network(dataset_name, epochs, batch_size, batch_epoch_ratio, figu
 
 #static parameter for the netwotk
 datasets_videos = dict(
-    hocky = dict(hocky ="data/raw_videos/HockeyFights"),
+    # hocky = dict(hocky ="data/raw_videos/HockeyFights"),
                        violentflow=dict(violentflow="data/raw_videos/violentflow"),
-                        movies=dict(movies="data/raw_videos/movies")
+                        # movies=dict(movies="data/raw_videos/movies")
                        )
 
 crop_dark=dict(
@@ -194,7 +194,7 @@ batch_size = 2
 #fix_len = 20
 initial_weights = 'glorot_uniform'
 weights='imagenet'
-force = False
+force = True
 lstm = (ConvLSTM2D, dict(filters=256, kernel_size=(3, 3),padding='same', return_sequences=False))
 classes = 1
 
@@ -207,8 +207,6 @@ fix_lens = [20, 10]
 optimizers =[ (RMSprop,{}),(Adam, {})]
 dropouts =[0.0, 0.5]
 cnn_train_types = ['retrain','static']
-
-
 
 apply_hyper = True
 
