@@ -1,4 +1,5 @@
 from keras import Input
+from keras.callbacks import Callback
 from keras.layers import Dense, Flatten, Dropout, ZeroPadding3D, ConvLSTM2D, Reshape, BatchNormalization, Activation
 from keras.layers.recurrent import LSTM
 from keras.models import Sequential, load_model
@@ -12,6 +13,7 @@ import logging
 from keras.applications import Xception, ResNet50, InceptionV3
 from keras.layers import Dense, GlobalAveragePooling2D
 from keras.models import Model
+
 
 def build(size, seq_len , learning_rate ,
           optimizer_class ,\

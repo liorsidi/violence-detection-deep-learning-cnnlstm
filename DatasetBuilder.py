@@ -14,7 +14,7 @@ import random
 
 corner_keys = ["Center","Left_up","Left_down","Right_up","Right_down"]
 
-Debug_Print_AUG=True
+Debug_Print_AUG=False
 
 def save_figures_from_video(dataset_video_path, video_filename, suffix,figures_path,skip_frames = 25,apply_norm = True, apply_diff = True,fix_len = None):
     seq_len = 0
@@ -191,7 +191,7 @@ def crop_img(img,figure_shape,percentage=0.8,corner="Left_up"):
         y_start = half
         y_end = figure_shape-half
 
-    img = cv2.resize(img[y_start:y_end,x_start:x_end, :], (figure_shape, figure_shape))
+    img = cv2.resize(img[y_start:y_end,x_start:x_end, :], (figure_shape, figure_shape)).astype(np.float32)
     return img
 
 
@@ -202,24 +202,25 @@ def get_sequences(data_paths,labels,figure_shape,seq_length,classes=1, use_augme
         frames = sorted(glob.glob(os.path.join(data_path, '*jpg')))
         x = frame_loader(frames, figure_shape)
         if(crop_x_y):
-            x = [crop_img__remove_Dark(y,crop_x_y[0],crop_x_y[1],y.shape[0],y.shape[1],figure_shape) for y in x]
+            x = [crop_img__remove_Dark(x_,crop_x_y[0],crop_x_y[1],x_.shape[0],x_.shape[1],figure_shape) for x_ in x]
         if use_augmentation:
             rand = scipy.random.random()
             corner=""
             if rand > 0.5:
                 if(use_crop):
                     corner=random.choice(corner_keys)
-                    x = [crop_img(y,figure_shape,0.7,corner) for y in x]
+                    x = [crop_img(x_,figure_shape,0.7,corner) for x_ in x]
                 x = [frame.transpose(1, 0, 2) for frame in x]
                 if(Debug_Print_AUG):
                     to_write = [list(a) for a in zip(frames, x)]
-                    [cv2.imwrite(x[0] + "_" + corner, x[1] * 255) for x in to_write]
+                    [cv2.imwrite(x_[0] + "_" + corner, x_[1] * 255) for x_ in to_write]
+
         x = [x[i] - x[i+1] for i in range(len(x)-1)]
         X.append(x)
         y.append(label)
     X = pad_sequences(X, maxlen=seq_length, padding='pre', truncating='pre')
     if classes > 1:
-        y = to_categorical(y,classes)
+        x_ = to_categorical(x_,classes)
     return np.array(X), np.array(y)
 
 import re
