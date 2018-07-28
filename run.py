@@ -173,9 +173,9 @@ def hyper_tune_network(dataset_name, epochs, batch_size, batch_epoch_ratio, figu
 
 #static parameter for the netwotk
 datasets_videos = dict(
-    # hocky = dict(hocky ="data/raw_videos/HockeyFights"),
+    hocky = dict(hocky ="data/raw_videos/HockeyFights"),
                        violentflow=dict(violentflow="data/raw_videos/violentflow"),
-                        # movies=dict(movies="data/raw_videos/movies")
+                        movies=dict(movies="data/raw_videos/movies")
                        )
 
 crop_dark=dict(
@@ -191,7 +191,7 @@ figure_size = 244
 #split_ratio = 0.1
 batch_size = 2
 #batch_epoch_ratio = 0.5 #double the size because we use augmentation
-#fix_len = 20
+fix_len = 20
 initial_weights = 'glorot_uniform'
 weights='imagenet'
 force = True
@@ -199,7 +199,6 @@ lstm = (ConvLSTM2D, dict(filters=256, kernel_size=(3, 3),padding='same', return_
 classes = 1
 
 #hyper parameters for tunning the network
-
 cnns_arch = dict(ResNet50 = ResNet50,InceptionV3 =InceptionV3, VGG19 = VGG19)  #
 learning_rates = [1e-4, 1e-3]
 use_augs =[True,False, ]
