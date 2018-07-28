@@ -5,10 +5,31 @@ The original model was implemented with Pytorch [2] while in this work we implem
 The model incorporates pre-trained convolution Neural Network (CNN) connected to Convolutional LSTM (ConvLSTM) layer.
 The model takes as an inputs the raw video, converts it into frames and output a binary classication of violence or non-violence label.
 
-#### Architecture stracture
+### Architecture structure
 ![alt text](https://github.com/liorsidi/ViolenceDetection_CNNLSTM/blob/master/images/Architecture.jpeg)
 
-#### Hypertunning results
+
+## Running configurations
+### Video datasets paths:
+data path are defined as follows:
+- hocky - data/raw_videos/HockeyFights
+- violentflow - data/raw_videos/violentflow
+- movies - data/raw_videos/movies
+
+### Libraries perquisites:
+- python 2.7
+- numpy 1.14.0
+- keras 2.2.0
+- tensorflow 1.9.0
+- Pillow 3.1.2
+- opencv-python 3.4.1.15
+
+### Running operation:
+just run python run.py
+(currently we don't support arguments from command line)
+
+## Results
+#### Hyper-tuning results
 ![alt text](https://github.com/liorsidi/ViolenceDetection_CNNLSTM/blob/master/images/hyperparameters_results.JPG)
 
 #### Hockey dataset results
