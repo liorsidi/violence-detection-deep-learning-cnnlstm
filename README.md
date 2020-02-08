@@ -29,7 +29,7 @@ just run python run.py
 (currently we don't support arguments from command line)
 
 ## Results
-#### Hyper-tuning results
+#### Hyper-tuning results (Hocky data)
 ![alt text](https://github.com/liorsidi/ViolenceDetection_CNNLSTM/blob/master/images/hyperparameters_results.JPG)
 
 #### Hockey dataset results
