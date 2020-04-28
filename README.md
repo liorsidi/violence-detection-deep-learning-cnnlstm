@@ -1,9 +1,6 @@
 # Learning to Detect Violent Videos using Convolution LSTM
 
-This work is based on violence detection model proposed by [1] with minor modications.
-The original model was implemented with Pytorch [2] while in this work we implement it with Keras and TensorFlow as a back-end. 
-The model incorporates pre-trained convolution Neural Network (CNN) connected to Convolutional LSTM (ConvLSTM) layer.
-The model takes as an inputs the raw video, converts it into frames and output a binary classication of violence or non-violence label.
+This work is based on a violence detection model proposed by [1] with minor modifications. The original model was implemented with Pytorch [2].  in this work, we implement it with Keras and TensorFlow as a back-end. The model incorporates a pre-trained convolution Neural Network (CNN) connected to Convolutional LSTM (ConvLSTM) layer. The model takes as an input the raw video, converts it into frames, and output a binary classification of violence or non-violence label.
 
 ### Architecture structure
 ![alt text](https://github.com/liorsidi/ViolenceDetection_CNNLSTM/blob/master/images/Architecture.jpeg)
